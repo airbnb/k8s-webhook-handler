@@ -163,5 +163,7 @@ func (p *purger) deleteResource(resource runtime.Unstructured, client dynamic.Re
 	name := metadata.GetName()
 	logger := log.With(logger, "name", name, "self-link", metadata.GetSelfLink())
 	logger.Log("msg", "Deleting")
-	return client.Delete(name, &metav1.DeleteOptions{}) // FIXME: Should we specify PropagationPolicy?
+	return client.Delete(name, &metav1.DeleteOptions{
+		PropagationPolicy: &metav1.DeletePropagationForeground,
+	})
 }

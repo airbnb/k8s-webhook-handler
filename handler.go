@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"strings"
 
@@ -19,7 +20,7 @@ func newGithubHandler(p *purger) webhooks.Webhook {
 
 func githubHandler(p *purger) func(payload interface{}, header webhooks.Header) {
 	return func(payload interface{}, header webhooks.Header) {
-		logger := log.With(logger, "payload", payload)
+		logger := log.With(logger, "payload", fmt.Sprintf("%v", payload))
 		level.Debug(logger).Log("msg", "Handling webhook")
 		if err := handleDelete(p, payload, header); err != nil {
 			level.Error(logger).Log("msg", "Couldn't handle webhook", "error", err)

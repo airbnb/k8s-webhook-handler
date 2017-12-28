@@ -14,6 +14,7 @@ spec:
         k8s-app: k8s-ci-purger
       name: k8s-ci-purger
     spec:
+      serviceAccountName: k8s-ci-purger
       imagePullSecrets:
         - name: private-registry
       containers:

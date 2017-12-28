@@ -1,6 +1,6 @@
 version: 2
 jobs:
-  build:
+  build-and-deploy:
     docker:
       - image: itskoko/koko-ci-tools:latest
     steps:
@@ -10,11 +10,15 @@ jobs:
           name: Build
           command: koko-build itskoko/k8s-ci-purger
 
+      - run:
+          name: Deploy
+          command: koko-deploy itskoko/k8s-ci-purger deployment/k8s-ci-purger
+
 workflows:
   version: 2
   build-and-deploy:
     jobs:
-      - build:
+      - build-and-deploy:
           context: org-global
           filters:
             branches:

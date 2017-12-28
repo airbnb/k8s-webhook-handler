@@ -22,7 +22,7 @@ spec:
           env:
           - name: GITHUB_SECRET
             valueFrom:
-              configMapKeyRef:
+              secretKeyRef:
                 name: k8s-ci
                 key: GITHUB_SECRET
           ports:

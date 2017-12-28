@@ -1,0 +1,22 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: itskoko/koko-ci-tools:latest
+    steps:
+      - setup_remote_docker
+      - checkout
+      - run:
+          name: Build
+          command: koko-build itskoko/k8s-ci-purger
+
+workflows:
+  version: 2
+  build-and-deploy:
+    jobs:
+      - build:
+          context: org-global
+          filters:
+            branches:
+              only: /^(master|circleci)$/
+

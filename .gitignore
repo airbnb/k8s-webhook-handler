@@ -1,0 +1,3 @@
+k8s-ci-purger
+vendor/*
+!vendor/vendor.json

@@ -8,7 +8,7 @@ import (
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/pkg/errors"
-	"gopkg.in/go-playground/webhooks.v3/github"
+	webhooks "gopkg.in/go-playground/webhooks.v3"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -62,9 +62,9 @@ func main() {
 	}
 
 	p := &purger{
-		Clientset:   clientset,
-		ClientPool:  dynamic.NewDynamicClientPool(config),
-		selectorKey: *sourceSelectorKey,
+		DiscoveryInterface: clientset.Discovery(),
+		ClientPool:         dynamic.NewDynamicClientPool(config),
+		selectorKey:        *sourceSelectorKey,
 	}
 	if *sourceSelectorVal != "" {
 		if err := p.purge(*sourceSelectorVal, *namespace); err != nil {
@@ -72,21 +72,27 @@ func main() {
 		}
 		os.Exit(0)
 	}
-	hook := github.New(&github.Config{Secret: os.Getenv("GITHUB_SECRET")})
-	hook.RegisterEvents(p.handleDelete, github.DeleteEvent)
+	if err := webhooks.Run(newGithubHandler(p), *listenAddr, "/"); err != nil {
+		fatal(err)
+	}
+}
+
+// interface so we can mock ClientPool in tests
+type clientForGroupVersionKinder interface {
+	ClientForGroupVersionKind(kind schema.GroupVersionKind) (dynamic.Interface, error)
 }
 
 type purger struct {
-	*kubernetes.Clientset
-	dynamic.ClientPool
+	discovery.DiscoveryInterface
+	ClientPool  clientForGroupVersionKinder
 	selectorKey string
 }
 
-func (p *purger) purge(repo, branch string) error {
-	selector := p.selectorKey + " = " + repo
-	level.Debug(logger).Log("msg", "Using selector", "selector", selector)
+func (p *purger) purge(selectorVal, namespace string) error {
+	selector := p.selectorKey + " = " + selectorVal
+	level.Debug(logger).Log("msg", "Purging", "selector", selector, "namespace", namespace)
 
-	preferredResources, err := p.Discovery().ServerPreferredResources()
+	preferredResources, err := p.DiscoveryInterface.ServerPreferredResources()
 	if err != nil {
 		return err
 	}
@@ -110,7 +116,7 @@ func (p *purger) purge(repo, branch string) error {
 				continue
 			}
 
-			if err := p.deleteResourceList(&gv, &resource, selector, branch); err != nil {
+			if err := p.deleteResourceList(&gv, &resource, selector, namespace); err != nil {
 				return errors.WithStack(err)
 			}
 		}

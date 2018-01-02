@@ -32,8 +32,7 @@ var (
 	dryRun            = flag.Bool("dry", false, "Enable dry-run, print resources instead of deleting them")
 	debug             = flag.Bool("debug", false, "Enable debug logging")
 
-	logger            = log.With(log.NewLogfmtLogger(log.NewSyncWriter(os.Stderr)), "caller", log.DefaultCaller)
-	propagationPolicy = metav1.DeletePropagationForeground
+	logger = log.With(log.NewLogfmtLogger(log.NewSyncWriter(os.Stderr)), "caller", log.DefaultCaller)
 )
 
 func configure() (config *rest.Config, err error) {
@@ -48,6 +47,19 @@ func fatal(err error) {
 	logger := log.With(logger, "caller", log.Caller(4))
 	level.Error(logger).Log("msg", err.Error())
 	os.Exit(1)
+}
+
+type webhookLogger struct {
+}
+
+func (l *webhookLogger) Info(msg string) {
+	level.Info(logger).Log("msg", msg)
+}
+func (l *webhookLogger) Error(msg string) {
+	level.Error(logger).Log("msg", msg)
+}
+func (l *webhookLogger) Debug(msg string) {
+	level.Debug(logger).Log("msg", msg)
 }
 
 func main() {
@@ -78,6 +90,7 @@ func main() {
 		}
 		os.Exit(0)
 	}
+	webhooks.DefaultLog = &webhookLogger{}
 	if err := webhooks.Run(newGithubHandler(p), *listenAddr, "/"); err != nil {
 		fatal(err)
 	}
@@ -149,6 +162,8 @@ func (p *purger) purge(selectorVal, namespace string) error {
 			if *dryRun {
 				continue
 			}
+			// Namespaces need to be deleted in the background.
+			propagationPolicy := metav1.DeletePropagationBackground
 			if err := p.NamespaceInterface.Delete(namespace, &metav1.DeleteOptions{
 				PropagationPolicy: &propagationPolicy,
 			}); err != nil {
@@ -212,6 +227,7 @@ func (p *purger) deleteResource(resource runtime.Unstructured, client dynamic.Re
 	if *dryRun {
 		return nil
 	}
+	propagationPolicy := metav1.DeletePropagationForeground
 	return client.Delete(name, &metav1.DeleteOptions{
 		PropagationPolicy: &propagationPolicy,
 	})

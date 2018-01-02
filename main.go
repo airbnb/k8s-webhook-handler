@@ -32,7 +32,7 @@ var (
 	dryRun            = flag.Bool("dry", false, "Enable dry-run, print resources instead of deleting them")
 	debug             = flag.Bool("debug", false, "Enable debug logging")
 
-	logger = log.With(log.NewLogfmtLogger(log.NewSyncWriter(os.Stderr)), "caller", log.DefaultCaller)
+	logger = log.With(log.NewLogfmtLogger(log.NewSyncWriter(os.Stderr)), "caller", log.Caller(5))
 )
 
 func configure() (config *rest.Config, err error) {
@@ -135,6 +135,7 @@ func (p *purger) purge(selectorVal, namespace string) error {
 	if err != nil {
 		return errors.WithStack(err)
 	}
+	resourcesLabeled := 0
 	for _, resourceList := range resourceLists {
 		gv, err := schema.ParseGroupVersion(resourceList.GroupVersion)
 		if err != nil {
@@ -150,33 +151,28 @@ func (p *purger) purge(selectorVal, namespace string) error {
 			if err != nil {
 				return errors.WithStack(err)
 			}
-			resourcesLabeled := 0
 			for _, metadata := range retained {
-				repo, ok := metadata.GetLabels()[p.selectorKey]
-				if ok {
+				ls := labels.Set(metadata.GetLabels())
+				if ls.Has(p.selectorKey) {
 					resourcesLabeled++
-					level.Debug(logger).Log("msg", "Found resource labeled for other repo", "repo", repo)
+					level.Debug(logger).Log("msg", "Found resource labeled for other repo", "repo", ls.Get(p.selectorKey))
 				}
-			}
-			if resourcesLabeled > 0 {
-				level.Info(logger).Log("msg", "Found resources labeled for other repos", "resourcesLabeled", resourcesLabeled)
-				continue
-			}
-			level.Debug(logger).Log("msg", "Deleting empty namespace")
-			if *dryRun {
-				continue
-			}
-			// Namespaces need to be deleted in the background.
-			propagationPolicy := metav1.DeletePropagationBackground
-			if err := p.NamespaceInterface.Delete(namespace, &metav1.DeleteOptions{
-				PropagationPolicy: &propagationPolicy,
-			}); err != nil {
-				return errors.WithStack(err)
 			}
 		}
 	}
-	// Check if namespace is empty
-	return nil
+	if resourcesLabeled > 0 {
+		level.Info(logger).Log("msg", "Found resources labeled for other repos, keeping namespace", "resourcesLabeled", resourcesLabeled)
+		return nil
+	}
+	level.Debug(logger).Log("msg", "Deleting empty namespace")
+	if *dryRun {
+		return nil
+	}
+	// Namespaces need to be deleted in the background.
+	propagationPolicy := metav1.DeletePropagationBackground
+	return p.NamespaceInterface.Delete(namespace, &metav1.DeleteOptions{
+		PropagationPolicy: &propagationPolicy,
+	})
 }
 
 func (p *purger) deleteResourceList(gv *schema.GroupVersion, resource *metav1.APIResource, selector labels.Selector, namespace string) ([]metav1.Object, error) {

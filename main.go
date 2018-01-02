@@ -108,16 +108,16 @@ type purger struct {
 	selectorKey string
 }
 
-func (p *purger) purge(selectorVal, namespace string) error {
-	selector := labels.NewSelector()
-	req, err := labels.NewRequirement(p.selectorKey, selection.Equals, []string{selectorVal})
+func (p *purger) newSelector(val string) (labels.Selector, error) {
+	req, err := labels.NewRequirement(p.selectorKey, selection.Equals, []string{val})
 	if err != nil {
 		// Should never happen
-		return errors.WithStack(err)
+		return nil, err
 	}
-	selector.Add(*req)
-	level.Debug(logger).Log("msg", "Purging", "selector", selector, "namespace", namespace)
+	return labels.NewSelector().Add(*req), nil
+}
 
+func (p *purger) purge(selectorVal, namespace string) error {
 	preferredResources, err := p.DiscoveryInterface.ServerPreferredResources()
 	if err != nil {
 		return err
@@ -129,7 +129,11 @@ func (p *purger) purge(selectorVal, namespace string) error {
 		preferredResources,
 	)
 	if err != nil {
-		return err
+		return errors.WithStack(err)
+	}
+	selector, err := p.newSelector(selectorVal)
+	if err != nil {
+		return errors.WithStack(err)
 	}
 	for _, resourceList := range resourceLists {
 		gv, err := schema.ParseGroupVersion(resourceList.GroupVersion)

@@ -30,7 +30,10 @@ func TestHandleDelete(t *testing.T) {
 		Namespace: branch,
 		Labels:    map[string]string{selectorKey: selectorValue},
 	}}
-	clientset := fake.NewSimpleClientset(service)
+	namespace := &v1.Namespace{ObjectMeta: metav1.ObjectMeta{
+		Name: branch,
+	}}
+	clientset := fake.NewSimpleClientset(namespace, service)
 
 	discoveryInterface := clientset.Discovery()
 	// FIXME: DiscoveryInterface mock isn't complete, so
@@ -39,6 +42,7 @@ func TestHandleDelete(t *testing.T) {
 	t.Log(clientset.Fake.Resources)
 	p := &purger{
 		DiscoveryInterface: discoveryInterface,
+		NamespaceInterface: clientset.CoreV1().Namespaces(),
 		ClientPool:         &dfake.FakeClientPool{Fake: clientset.Fake},
 		selectorKey:        "ci-source-repo",
 	}

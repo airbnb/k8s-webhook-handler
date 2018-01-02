@@ -11,11 +11,14 @@ import (
 	webhooks "gopkg.in/go-playground/webhooks.v3"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -26,9 +29,11 @@ var (
 	sourceSelectorVal = flag.String("sv", "", "If set, delete all resources matching this selector and exit")
 	namespace         = flag.String("ns", "stage", "Namespace to use when -source-selector is given")
 	kubeconfig        = flag.String("kubeconfig", "", "If set, use this kubeconfig to connect to kubernetes")
+	dryRun            = flag.Bool("dry", false, "Enable dry-run, print resources instead of deleting them")
+	debug             = flag.Bool("debug", false, "Enable debug logging")
 
-	debug  = flag.Bool("debug", false, "Enable debug logging")
-	logger = log.With(log.NewLogfmtLogger(log.NewSyncWriter(os.Stderr)), "caller", log.DefaultCaller)
+	logger            = log.With(log.NewLogfmtLogger(log.NewSyncWriter(os.Stderr)), "caller", log.DefaultCaller)
+	propagationPolicy = metav1.DeletePropagationForeground
 )
 
 func configure() (config *rest.Config, err error) {
@@ -63,6 +68,7 @@ func main() {
 
 	p := &purger{
 		DiscoveryInterface: clientset.Discovery(),
+		NamespaceInterface: clientset.CoreV1().Namespaces(),
 		ClientPool:         dynamic.NewDynamicClientPool(config),
 		selectorKey:        *sourceSelectorKey,
 	}
@@ -84,12 +90,19 @@ type clientForGroupVersionKinder interface {
 
 type purger struct {
 	discovery.DiscoveryInterface
+	v1.NamespaceInterface
 	ClientPool  clientForGroupVersionKinder
 	selectorKey string
 }
 
 func (p *purger) purge(selectorVal, namespace string) error {
-	selector := p.selectorKey + " = " + selectorVal
+	selector := labels.NewSelector()
+	req, err := labels.NewRequirement(p.selectorKey, selection.Equals, []string{selectorVal})
+	if err != nil {
+		// Should never happen
+		return errors.WithStack(err)
+	}
+	selector.Add(*req)
 	level.Debug(logger).Log("msg", "Purging", "selector", selector, "namespace", namespace)
 
 	preferredResources, err := p.DiscoveryInterface.ServerPreferredResources()
@@ -116,15 +129,38 @@ func (p *purger) purge(selectorVal, namespace string) error {
 				continue
 			}
 
-			if err := p.deleteResourceList(&gv, &resource, selector, namespace); err != nil {
+			retained, err := p.deleteResourceList(&gv, &resource, selector, namespace)
+			if err != nil {
+				return errors.WithStack(err)
+			}
+			resourcesLabeled := 0
+			for _, metadata := range retained {
+				repo, ok := metadata.GetLabels()[p.selectorKey]
+				if ok {
+					resourcesLabeled++
+					level.Debug(logger).Log("msg", "Found resource labeled for other repo", "repo", repo)
+				}
+			}
+			if resourcesLabeled > 0 {
+				level.Info(logger).Log("msg", "Found resources labeled for other repos", "resourcesLabeled", resourcesLabeled)
+				continue
+			}
+			level.Debug(logger).Log("msg", "Deleting empty namespace")
+			if *dryRun {
+				continue
+			}
+			if err := p.NamespaceInterface.Delete(namespace, &metav1.DeleteOptions{
+				PropagationPolicy: &propagationPolicy,
+			}); err != nil {
 				return errors.WithStack(err)
 			}
 		}
 	}
+	// Check if namespace is empty
 	return nil
 }
 
-func (p *purger) deleteResourceList(gv *schema.GroupVersion, resource *metav1.APIResource, selector, namespace string) error {
+func (p *purger) deleteResourceList(gv *schema.GroupVersion, resource *metav1.APIResource, selector labels.Selector, namespace string) ([]metav1.Object, error) {
 	logger := log.With(logger, "namespace", namespace, "selector", selector)
 	level.Debug(logger).Log("msg", "Getting resources to delete")
 	// Based on https://github.com/heptio/ark/blob/1210cb36e10c2cd5a27633fc71a920d6eff37052/pkg/client/dynamic.go#L49:
@@ -132,27 +168,37 @@ func (p *purger) deleteResourceList(gv *schema.GroupVersion, resource *metav1.AP
 	// > it only needs the group and version.
 	client, err := p.ClientPool.ClientForGroupVersionKind(gv.WithKind(""))
 	if err != nil {
-		return fmt.Errorf("Couldn't create client for GroupVersionKind: %s", err)
+		return nil, fmt.Errorf("Couldn't create client for GroupVersionKind: %s", err)
 	}
 	rclient := client.Resource(resource, namespace)
-	list, err := rclient.List(metav1.ListOptions{LabelSelector: selector})
+	list, err := rclient.List(metav1.ListOptions{})
 	if err != nil {
-		return fmt.Errorf("Couldn't List resources: %s", err)
+		return nil, fmt.Errorf("Couldn't List resources: %s", err)
 	}
 	resources, err := meta.ExtractList(list)
 	if err != nil {
-		return fmt.Errorf("Couldn't extract list: %s", err)
+		return nil, fmt.Errorf("Couldn't extract list: %s", err)
 	}
+	retained := []metav1.Object{}
 	for _, resource := range resources {
+		// metav1.ListOptions{LabelSelector: selector})
 		unstructured, ok := resource.(runtime.Unstructured)
 		if !ok {
-			return fmt.Errorf("Unexpected type for %v", resource)
+			return nil, fmt.Errorf("Unexpected type for %v", resource)
 		}
-		if err := p.deleteResource(unstructured, rclient); err != nil {
-			return fmt.Errorf("Couldn't delete resource: %s", err)
+		metadata, err := meta.Accessor(unstructured)
+		if err != nil {
+			return nil, fmt.Errorf("Couldn't get metadata for %v: %s", unstructured, err)
+		}
+		if selector.Matches(labels.Set(metadata.GetLabels())) {
+			if err := p.deleteResource(unstructured, rclient); err != nil {
+				return nil, fmt.Errorf("Couldn't delete resource: %s", err)
+			}
+		} else {
+			retained = append(retained, metadata)
 		}
 	}
-	return nil
+	return retained, nil
 }
 
 func (p *purger) deleteResource(resource runtime.Unstructured, client dynamic.ResourceInterface) error {
@@ -163,7 +209,9 @@ func (p *purger) deleteResource(resource runtime.Unstructured, client dynamic.Re
 	name := metadata.GetName()
 	logger := log.With(logger, "name", name, "self-link", metadata.GetSelfLink())
 	logger.Log("msg", "Deleting")
-	propagationPolicy := metav1.DeletePropagationForeground
+	if *dryRun {
+		return nil
+	}
 	return client.Delete(name, &metav1.DeleteOptions{
 		PropagationPolicy: &propagationPolicy,
 	})

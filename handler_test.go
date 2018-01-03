@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/go-kit/kit/metrics/statsd"
 	"github.com/google/go-github/github"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -51,7 +52,7 @@ func TestHandleDelete(t *testing.T) {
 		ClientPool:         &dfake.FakeClientPool{Fake: clientset.Fake},
 		selectorKey:        selectorKey,
 	}
-	h := newGithubHook(p, []byte(""))
+	h := newGithubHook(p, []byte("foo"), statsd.New("k8s-ci-purger.", logger))
 
 	payload := github.DeleteEvent{
 		RefType: &refType,

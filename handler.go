@@ -25,12 +25,17 @@ func (h *hook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	logger := log.With(logger, "client", r.RemoteAddr)
 	if err := h.handle(w, r); err != nil {
 		level.Error(logger).Log("msg", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	fmt.Fprint(w, "OK")
 }
 
 func (h *hook) handle(w http.ResponseWriter, r *http.Request) error {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method %s not supported", http.StatusBadRequest)
+		return nil
+	}
 	payload, err := github.ValidatePayload(r, h.secret)
 	if err != nil {
 		return fmt.Errorf("Couldn't read body: %s", err)

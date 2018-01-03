@@ -60,6 +60,36 @@
 			"revisionTime": "2017-11-12T23:47:20Z"
 		},
 		{
+			"checksumSHA1": "nTvjvV5LXuF2GYf7jIi+OFb1mjk=",
+			"path": "github.com/go-kit/kit/metrics",
+			"revision": "e3b2152e0063c5f05efea89ecbe297852af2a92d",
+			"revisionTime": "2017-11-12T23:47:20Z"
+		},
+		{
+			"checksumSHA1": "nqjHqtG6eWaipohdW/nM5h51JVE=",
+			"path": "github.com/go-kit/kit/metrics/internal/lv",
+			"revision": "e3b2152e0063c5f05efea89ecbe297852af2a92d",
+			"revisionTime": "2017-11-12T23:47:20Z"
+		},
+		{
+			"checksumSHA1": "t8CEfM4BLNrBUS+rHuQnLxBN0z4=",
+			"path": "github.com/go-kit/kit/metrics/internal/ratemap",
+			"revision": "e3b2152e0063c5f05efea89ecbe297852af2a92d",
+			"revisionTime": "2017-11-12T23:47:20Z"
+		},
+		{
+			"checksumSHA1": "sMA++PzHFzE5LS53H3Bdhj6o84o=",
+			"path": "github.com/go-kit/kit/metrics/statsd",
+			"revision": "e3b2152e0063c5f05efea89ecbe297852af2a92d",
+			"revisionTime": "2017-11-12T23:47:20Z"
+		},
+		{
+			"checksumSHA1": "FIx/LfpCx7fKlsoTrip1V9J+qKs=",
+			"path": "github.com/go-kit/kit/util/conn",
+			"revision": "e3b2152e0063c5f05efea89ecbe297852af2a92d",
+			"revisionTime": "2017-11-12T23:47:20Z"
+		},
+		{
 			"checksumSHA1": "KxX/Drph+byPXBFIXaCZaCOAnrU=",
 			"path": "github.com/go-logfmt/logfmt",
 			"revision": "390ab7935ee28ec6b286364bba9b4dd6410cb3d5",

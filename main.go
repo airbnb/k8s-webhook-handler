@@ -6,9 +6,12 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
+	"github.com/go-kit/kit/metrics/statsd"
+
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -32,6 +35,10 @@ var (
 	kubeconfig        = flag.String("kubeconfig", "", "If set, use this kubeconfig to connect to kubernetes")
 	dryRun            = flag.Bool("dry", false, "Enable dry-run, print resources instead of deleting them")
 	debug             = flag.Bool("debug", false, "Enable debug logging")
+
+	statsdAddress  = flag.String("statsd.address", "localhost:8125", "Address to send statsd metrics to")
+	statsdProto    = flag.String("statsd.proto", "udp", "Protocol to use for statsd")
+	statsdInterval = flag.Duration("statsd.interval", 30*time.Second, "statsd flush interval")
 
 	logger = log.With(log.NewLogfmtLogger(log.NewSyncWriter(os.Stderr)), "caller", log.Caller(5))
 )
@@ -70,6 +77,7 @@ func main() {
 		fatal(err)
 	}
 
+	statsdClient := statsd.New("k8s-ci-purger.", logger)
 	p := &purger{
 		DiscoveryInterface: clientset.Discovery(),
 		NamespaceInterface: clientset.CoreV1().Namespaces(),
@@ -82,7 +90,12 @@ func main() {
 		}
 		os.Exit(0)
 	}
-	http.Handle("/", newGithubHook(p, []byte(githubSecret)))
+
+	ticker := time.NewTicker(*statsdInterval)
+	defer ticker.Stop()
+	go statsdClient.SendLoop(ticker.C, *statsdProto, *statsdAddress)
+
+	http.Handle("/", newGithubHook(p, []byte(githubSecret), statsdClient))
 	fatal(http.ListenAndServe(*listenAddr, nil))
 }
 

@@ -1,9 +1,12 @@
 package main
 
 import (
+	"fmt"
+	"io/ioutil"
+	"net/http/httptest"
 	"testing"
 
-	"gopkg.in/go-playground/webhooks.v3/github"
+	"github.com/google/go-github/github"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	dfake "k8s.io/client-go/dynamic/fake"
@@ -21,9 +24,11 @@ import (
 // }
 
 func TestHandleDelete(t *testing.T) {
+	repo := "foo/bar"
 	selectorKey := "ci-source-repo"
 	selectorValue := "foo.bar"
 	branch := "master"
+	refType := "branch"
 
 	service := &v1.Service{ObjectMeta: metav1.ObjectMeta{
 		Name:      "foo",
@@ -44,14 +49,36 @@ func TestHandleDelete(t *testing.T) {
 		DiscoveryInterface: discoveryInterface,
 		NamespaceInterface: clientset.CoreV1().Namespaces(),
 		ClientPool:         &dfake.FakeClientPool{Fake: clientset.Fake},
-		selectorKey:        "ci-source-repo",
+		selectorKey:        selectorKey,
 	}
-	payload := github.DeletePayload{
-		RefType: "branch",
-		Ref:     branch,
+	h := newGithubHook(p, []byte(""))
+
+	payload := github.DeleteEvent{
+		RefType: &refType,
+		Ref:     &branch,
+		Repo: &github.Repository{
+			FullName: &repo,
+		},
 	}
-	payload.Repository.FullName = "foo/bar"
-	if err := handleDelete(p, payload, nil); err != nil {
-		t.Fatal(err)
-	}
+	fmt.Println(payload)
+
+	/*
+		pr, pw := io.Pipe()
+		enc := json.NewEncoder(pw)
+		go func() { enc.Encode(payload) }()*/
+
+	req := httptest.NewRequest("POST", "http://example.com/", nil) //pr)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-GitHub-Event", "DeleteEvent")
+	req.Header.Set("X-GitHub-Delivery", "4636fc67-b693-4a27-87a4-18d4021ae789")
+	req.Header.Set("X-Hub-Signature", "sha1=1234")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	resp := w.Result()
+	body, _ := ioutil.ReadAll(resp.Body)
+
+	fmt.Println(resp.StatusCode)
+	fmt.Println(resp.Header.Get("Content-Type"))
+	fmt.Println(string(body))
 }

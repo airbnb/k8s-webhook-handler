@@ -3,12 +3,13 @@ package main
 import (
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
+	"strings"
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/pkg/errors"
-	webhooks "gopkg.in/go-playground/webhooks.v3"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -49,21 +50,12 @@ func fatal(err error) {
 	os.Exit(1)
 }
 
-type webhookLogger struct {
-}
-
-func (l *webhookLogger) Info(msg string) {
-	level.Info(logger).Log("msg", msg)
-}
-func (l *webhookLogger) Error(msg string) {
-	level.Error(logger).Log("msg", msg)
-}
-func (l *webhookLogger) Debug(msg string) {
-	level.Debug(logger).Log("msg", msg)
-}
-
 func main() {
 	flag.Parse()
+	githubSecret := os.Getenv("GITHUB_SECRET")
+	if githubSecret == "" {
+		fatal(errors.New("GITHUB_SECRET env variable required"))
+	}
 	if *debug {
 		logger = level.NewFilter(logger, level.AllowAll())
 	} else {
@@ -90,10 +82,8 @@ func main() {
 		}
 		os.Exit(0)
 	}
-	webhooks.DefaultLog = &webhookLogger{}
-	if err := webhooks.Run(newGithubHandler(p), *listenAddr, "/"); err != nil {
-		fatal(err)
-	}
+	http.Handle("/", newGithubHook(p, []byte(githubSecret)))
+	fatal(http.ListenAndServe(*listenAddr, nil))
 }
 
 // interface so we can mock ClientPool in tests
@@ -117,7 +107,11 @@ func (p *purger) newSelector(val string) (labels.Selector, error) {
 	return labels.NewSelector().Add(*req), nil
 }
 
-func (p *purger) purge(selectorVal, namespace string) error {
+func (p *purger) purge(repo, branch string) error {
+	// Map repo to label selector value and branch to namespace
+	selectorVal := strings.Replace(repo, "/", ".", -1) // label values may not contain /
+	namespace := branch
+
 	preferredResources, err := p.DiscoveryInterface.ServerPreferredResources()
 	if err != nil {
 		return err

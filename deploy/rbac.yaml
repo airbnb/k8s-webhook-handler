@@ -11,7 +11,6 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: k8s-ci-purger
-  namespace: default
 ---
 apiVersion: rbac.authorization.k8s.io/v1beta1
 kind: ClusterRoleBinding
@@ -24,4 +23,3 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: k8s-ci-purger
-  namespace: default

@@ -3,27 +3,40 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
+	"github.com/go-kit/kit/metrics"
+	"github.com/go-kit/kit/metrics/statsd"
 	"github.com/google/go-github/github"
 )
 
 type hook struct {
 	*purger
 	secret []byte
+
+	requestCounter metrics.Counter
+	errorCounter   metrics.Counter
+	callDuration   metrics.Histogram
 }
 
-func newGithubHook(p *purger, secret []byte) *hook {
+func newGithubHook(p *purger, secret []byte, statsdClient *statsd.Statsd) *hook {
 	return &hook{
-		purger: p,
-		secret: secret,
+		purger:         p,
+		secret:         secret,
+		requestCounter: statsdClient.NewCounter("requests", 1.0),
+		errorCounter:   statsdClient.NewCounter("errors", 1.0),
+		callDuration:   statsdClient.NewTiming("duration", 1.0),
 	}
 }
 
 func (h *hook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	defer func(begin time.Time) { h.callDuration.Observe(time.Since(begin).Seconds()) }(time.Now())
 	logger := log.With(logger, "client", r.RemoteAddr)
+	h.requestCounter.Add(1)
 	if err := h.handle(w, r); err != nil {
+		h.errorCounter.Add(1)
 		level.Error(logger).Log("msg", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

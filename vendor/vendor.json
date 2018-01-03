@@ -151,6 +151,18 @@
 			"revisionTime": "2017-08-28T20:11:55Z"
 		},
 		{
+			"checksumSHA1": "anN/TnxlXVBFoO4WkroWimz5y9I=",
+			"path": "github.com/google/go-github/github",
+			"revision": "fc3c57184028a80ff3979d912cdaf5f08887f98a",
+			"revisionTime": "2017-12-29T15:47:42Z"
+		},
+		{
+			"checksumSHA1": "p3IB18uJRs4dL2K5yx24MrLYE9A=",
+			"path": "github.com/google/go-querystring/query",
+			"revision": "53e6ce116135b80d037921a7fdd5138cf32d7a8a",
+			"revisionTime": "2017-01-11T10:11:55Z"
+		},
+		{
 			"checksumSHA1": "PFtXkXPO7pwRtykVUUXtc07wc7U=",
 			"path": "github.com/google/gofuzz",
 			"revision": "24818f796faf91cd76ec7bddd72458fbced7a6c1",
@@ -306,18 +318,6 @@
 			"path": "golang.org/x/text/width",
 			"revision": "88f656faf3f37f690df1a32515b479415e1a6769",
 			"revisionTime": "2017-10-26T07:52:28Z"
-		},
-		{
-			"checksumSHA1": "GanJ7SeXO96cysKGmCW6aX/wvw4=",
-			"path": "gopkg.in/go-playground/webhooks.v3",
-			"revision": "ad5392160cf8f0bfc3be06bc469ce5dfa4cd77c4",
-			"revisionTime": "2017-12-18T06:05:38Z"
-		},
-		{
-			"checksumSHA1": "5dvKeVgPrMdIc9Vj0Gs6WhLAHjA=",
-			"path": "gopkg.in/go-playground/webhooks.v3/github",
-			"revision": "ad5392160cf8f0bfc3be06bc469ce5dfa4cd77c4",
-			"revisionTime": "2017-12-18T06:05:38Z"
 		},
 		{
 			"checksumSHA1": "pfQwQtWlFezJq0Viroa/L+v+yDM=",

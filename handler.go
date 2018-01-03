@@ -2,42 +2,57 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"strings"
+	"net/http"
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
-	"github.com/pkg/errors"
-	webhooks "gopkg.in/go-playground/webhooks.v3"
-	"gopkg.in/go-playground/webhooks.v3/github"
+	"github.com/google/go-github/github"
 )
 
-func newGithubHandler(p *purger) webhooks.Webhook {
-	hook := github.New(&github.Config{Secret: os.Getenv("GITHUB_SECRET")})
-	hook.RegisterEvents(githubHandler(p), github.DeleteEvent)
-	return hook
+type hook struct {
+	*purger
+	secret []byte
 }
 
-func githubHandler(p *purger) func(payload interface{}, header webhooks.Header) {
-	return func(payload interface{}, header webhooks.Header) {
-		logger := log.With(logger, "payload", fmt.Sprintf("%v", payload))
-		level.Debug(logger).Log("msg", "Handling webhook")
-		if err := handleDelete(p, payload, header); err != nil {
-			level.Error(logger).Log("msg", "Couldn't handle webhook", "error", err)
+func newGithubHook(p *purger, secret []byte) *hook {
+	return &hook{
+		purger: p,
+		secret: secret,
+	}
+}
+
+func (h *hook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	logger := log.With(logger, "client", r.RemoteAddr)
+	if err := h.handle(w, r); err != nil {
+		level.Error(logger).Log("msg", err)
+		return
+	}
+	fmt.Fprint(w, "OK")
+}
+
+func (h *hook) handle(w http.ResponseWriter, r *http.Request) error {
+	payload, err := github.ValidatePayload(r, h.secret)
+	if err != nil {
+		return fmt.Errorf("Couldn't read body: %s", err)
+	}
+	defer r.Body.Close()
+	event, err := github.ParseWebHook(github.WebHookType(r), payload)
+	if err != nil {
+		return fmt.Errorf("Couldn't parse body: %s", err)
+	}
+
+	logger := log.With(logger, "payload", fmt.Sprintf("%v", payload))
+	switch e := event.(type) {
+	case *github.DeleteEvent:
+		level.Debug(logger).Log("msg", "Handling DeleteEvent webhook")
+		if *e.RefType != "branch" {
+			level.Info(logger).Log("msg", "Ignoring delete event for refType", "refType", *e.RefType)
+			http.Error(w, "Nothing to do", http.StatusOK)
+			return nil
 		}
+		return h.purger.purge(*e.Repo.FullName, *e.Ref)
+	default:
+		http.Error(w, "Webhook not supported", http.StatusBadRequest)
+		return nil
 	}
-}
-
-func handleDelete(p *purger, payload interface{}, header webhooks.Header) error {
-	deletePayload, ok := payload.(github.DeletePayload)
-	if !ok {
-		return errors.New("Unexpected payload type")
-	}
-	if deletePayload.RefType != "branch" {
-		return errors.New("Unexpected ref type")
-	}
-	// FIXME: We should return a failure to the webhook or retry
-	selectorVal := strings.Replace(deletePayload.Repository.FullName, "/", ".", -1)
-	namespace := deletePayload.Ref
-	return p.purge(selectorVal, namespace)
 }

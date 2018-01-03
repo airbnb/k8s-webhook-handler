@@ -26,8 +26,9 @@ spec:
             - exec k8s-ci-purger -statsd.address $HOST_IP:8125
           env:
             - name: HOST_IP
-              fieldRef:
-                fieldPath: status.hostIP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
             - name: GITHUB_SECRET
               valueFrom:
                 secretKeyRef:

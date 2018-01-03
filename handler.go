@@ -28,12 +28,11 @@ func (h *hook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	fmt.Fprint(w, "OK")
 }
 
 func (h *hook) handle(w http.ResponseWriter, r *http.Request) error {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method %s not supported", http.StatusBadRequest)
+		http.Error(w, "Method not supported", http.StatusBadRequest)
 		return nil
 	}
 	payload, err := github.ValidatePayload(r, h.secret)

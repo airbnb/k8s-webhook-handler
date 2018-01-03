@@ -20,13 +20,19 @@ spec:
       containers:
         - name: k8s-ci-purger
           image: $IMAGE
-          args: [ "-debug" ]
+          command:
+            - /bin/sh
+            - -c
+            - exec k8s-ci-purger -statsd.address $HOST_IP:8125
           env:
-          - name: GITHUB_SECRET
-            valueFrom:
-              secretKeyRef:
-                name: k8s-ci
-                key: GITHUB_SECRET
+            - name: HOST_IP
+              fieldRef:
+                fieldPath: status.hostIP
+            - name: GITHUB_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: k8s-ci
+                  key: GITHUB_SECRET
           ports:
           - containerPort: 8080
             name: http

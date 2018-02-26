@@ -2,7 +2,10 @@ version: 2
 jobs:
   build-and-deploy:
     docker:
-      - image: itskoko/koko-ci-tools:latest
+      - image: 742965927775.dkr.ecr.us-east-1.amazonaws.com/itskoko/koko-ci-tools:latest
+        aws_auth:
+          aws_access_key_id: $AWS_ACCESS_KEY_ID
+          aws_secret_access_key: $AWS_SECRET_ACCESS_KEY
     steps:
       - setup_remote_docker
       - checkout

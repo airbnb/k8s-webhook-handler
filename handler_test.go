@@ -1,4 +1,4 @@
-package main
+package purger
 
 import (
 	"fmt"
@@ -46,13 +46,13 @@ func TestHandleDelete(t *testing.T) {
 	// ServerPreferredResources() returns nothing and breaks the purger
 	t.Log(discoveryInterface.ServerPreferredResources())
 	t.Log(clientset.Fake.Resources)
-	p := &purger{
+	p := &Purger{
 		DiscoveryInterface: discoveryInterface,
 		NamespaceInterface: clientset.CoreV1().Namespaces(),
 		ClientPool:         &dfake.FakeClientPool{Fake: clientset.Fake},
-		selectorKey:        selectorKey,
+		SelectorKey:        selectorKey,
 	}
-	h := newGithubHook(p, []byte("foo"), statsd.New("k8s-ci-purger.", logger))
+	h := NewGithubHook(p, []byte("foo"), statsd.New("k8s-ci-purger.", logger))
 
 	payload := github.DeleteEvent{
 		RefType: &refType,

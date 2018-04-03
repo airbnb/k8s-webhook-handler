@@ -1,4 +1,4 @@
-package main
+package purger
 
 import (
 	"fmt"
@@ -13,7 +13,7 @@ import (
 )
 
 type hook struct {
-	*purger
+	*Purger
 	secret []byte
 
 	requestCounter metrics.Counter
@@ -21,9 +21,9 @@ type hook struct {
 	callDuration   metrics.Histogram
 }
 
-func newGithubHook(p *purger, secret []byte, statsdClient *statsd.Statsd) *hook {
+func NewGithubHook(p *Purger, secret []byte, statsdClient *statsd.Statsd) *hook {
 	return &hook{
-		purger:         p,
+		Purger:         p,
 		secret:         secret,
 		requestCounter: statsdClient.NewCounter("requests", 1.0),
 		errorCounter:   statsdClient.NewCounter("errors", 1.0),
@@ -67,7 +67,7 @@ func (h *hook) handle(w http.ResponseWriter, r *http.Request) error {
 			http.Error(w, "Nothing to do", http.StatusOK)
 			return nil
 		}
-		return h.purger.purge(*e.Repo.FullName, *e.Ref)
+		return h.Purger.Purge(*e.Repo.FullName, *e.Ref)
 	default:
 		http.Error(w, "Webhook not supported", http.StatusBadRequest)
 		return nil

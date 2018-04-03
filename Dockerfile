@@ -5,10 +5,10 @@ COPY vendor/ vendor/
 RUN govendor sync
 COPY . .
 RUN go test $(go list ./... | grep -v /vendor/) \
-  && CGO_ENABLED=0 go build
+  && CGO_ENABLED=0 go install ./...
 
 FROM alpine:3.6
 RUN apk add --update ca-certificates && adduser -D user
 USER user
-COPY --from=0 /go/src/github.com/itskoko/k8s-ci-purger/k8s-ci-purger /usr/bin/
-ENTRYPOINT [ "k8s-ci-purger" ]
+COPY --from=0 /go/bin/webhook /usr/bin/
+ENTRYPOINT [ "webhook" ]

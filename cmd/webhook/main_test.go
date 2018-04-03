@@ -4,13 +4,15 @@ import (
 	"testing"
 
 	"k8s.io/apimachinery/pkg/labels"
+
+	purger "github.com/itskoko/k8s-ci-purger"
 )
 
 func TestSelector(t *testing.T) {
-	p := &purger{
-		selectorKey: "ci-source-repo",
+	p := &purger.Purger{
+		SelectorKey: "ci-source-repo",
 	}
-	selector, err := p.newSelector("foo")
+	selector, err := p.NewSelector("foo")
 	if err != nil {
 		t.Fatal(err)
 	}

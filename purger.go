@@ -1,16 +1,11 @@
-package main
+package purger
 
 import (
-	"flag"
 	"fmt"
-	"net/http"
-	"os"
 	"strings"
-	"time"
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
-	"github.com/go-kit/kit/metrics/statsd"
 
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -21,98 +16,24 @@ import (
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/typed/core/v1"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 )
-
-var (
-	listenAddr        = flag.String("l", ":8080", "Address to listen on for webhook requests")
-	sourceSelectorKey = flag.String("sk", "ci-source-repo", "Label key that identifies source repo")
-	sourceSelectorVal = flag.String("sv", "", "If set, delete all resources matching this selector and exit")
-	namespace         = flag.String("ns", "stage", "Namespace to use when -source-selector is given")
-	kubeconfig        = flag.String("kubeconfig", "", "If set, use this kubeconfig to connect to kubernetes")
-	dryRun            = flag.Bool("dry", false, "Enable dry-run, print resources instead of deleting them")
-	debug             = flag.Bool("debug", false, "Enable debug logging")
-
-	statsdAddress  = flag.String("statsd.address", "localhost:8125", "Address to send statsd metrics to")
-	statsdProto    = flag.String("statsd.proto", "udp", "Protocol to use for statsd")
-	statsdInterval = flag.Duration("statsd.interval", 30*time.Second, "statsd flush interval")
-
-	logger = log.With(log.NewLogfmtLogger(log.NewSyncWriter(os.Stderr)), "caller", log.Caller(5))
-)
-
-func configure() (config *rest.Config, err error) {
-	if *kubeconfig != "" {
-		return clientcmd.BuildConfigFromFlags("", *kubeconfig)
-	}
-	return rest.InClusterConfig()
-}
-
-func fatal(err error) {
-	// FIXME: override caller, not add it
-	logger := log.With(logger, "caller", log.Caller(4))
-	level.Error(logger).Log("msg", err.Error())
-	os.Exit(1)
-}
-
-func main() {
-	flag.Parse()
-	githubSecret := os.Getenv("GITHUB_SECRET")
-	if githubSecret == "" {
-		fatal(errors.New("GITHUB_SECRET env variable required"))
-	}
-	if *debug {
-		logger = level.NewFilter(logger, level.AllowAll())
-	} else {
-		logger = level.NewFilter(logger, level.AllowInfo())
-	}
-	config, err := configure()
-	if err != nil {
-		fatal(err)
-	}
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		fatal(err)
-	}
-
-	statsdClient := statsd.New("k8s-ci-purger.", logger)
-	p := &purger{
-		DiscoveryInterface: clientset.Discovery(),
-		NamespaceInterface: clientset.CoreV1().Namespaces(),
-		ClientPool:         dynamic.NewDynamicClientPool(config),
-		selectorKey:        *sourceSelectorKey,
-	}
-	if *sourceSelectorVal != "" {
-		if err := p.purge(*sourceSelectorVal, *namespace); err != nil {
-			fatal(err)
-		}
-		os.Exit(0)
-	}
-
-	ticker := time.NewTicker(*statsdInterval)
-	defer ticker.Stop()
-	go statsdClient.SendLoop(ticker.C, *statsdProto, *statsdAddress)
-
-	http.Handle("/", newGithubHook(p, []byte(githubSecret), statsdClient))
-	fatal(http.ListenAndServe(*listenAddr, nil))
-}
 
 // interface so we can mock ClientPool in tests
 type clientForGroupVersionKinder interface {
 	ClientForGroupVersionKind(kind schema.GroupVersionKind) (dynamic.Interface, error)
 }
 
-type purger struct {
+type Purger struct {
+	DryRun bool
 	discovery.DiscoveryInterface
 	v1.NamespaceInterface
 	ClientPool  clientForGroupVersionKinder
-	selectorKey string
+	SelectorKey string
 }
 
-func (p *purger) newSelector(val string) (labels.Selector, error) {
-	req, err := labels.NewRequirement(p.selectorKey, selection.Equals, []string{val})
+func (p *Purger) NewSelector(val string) (labels.Selector, error) {
+	req, err := labels.NewRequirement(p.SelectorKey, selection.Equals, []string{val})
 	if err != nil {
 		// Should never happen
 		return nil, err
@@ -120,7 +41,7 @@ func (p *purger) newSelector(val string) (labels.Selector, error) {
 	return labels.NewSelector().Add(*req), nil
 }
 
-func (p *purger) purge(repo, branch string) error {
+func (p *Purger) Purge(repo, branch string) error {
 	// Map repo to label selector value and branch to namespace
 	selectorVal := strings.Replace(repo, "/", ".", -1) // label values may not contain /
 	namespace := branch
@@ -138,7 +59,7 @@ func (p *purger) purge(repo, branch string) error {
 	if err != nil {
 		return errors.WithStack(err)
 	}
-	selector, err := p.newSelector(selectorVal)
+	selector, err := p.NewSelector(selectorVal)
 	if err != nil {
 		return errors.WithStack(err)
 	}
@@ -160,9 +81,9 @@ func (p *purger) purge(repo, branch string) error {
 			}
 			for _, metadata := range retained {
 				ls := labels.Set(metadata.GetLabels())
-				if ls.Has(p.selectorKey) {
+				if ls.Has(p.SelectorKey) {
 					resourcesLabeled++
-					level.Debug(logger).Log("msg", "Found resource labeled for other repo", "repo", ls.Get(p.selectorKey))
+					level.Debug(logger).Log("msg", "Found resource labeled for other repo", "repo", ls.Get(p.SelectorKey))
 				}
 			}
 		}
@@ -172,7 +93,7 @@ func (p *purger) purge(repo, branch string) error {
 		return nil
 	}
 	level.Debug(logger).Log("msg", "Deleting empty namespace")
-	if *dryRun {
+	if p.DryRun {
 		return nil
 	}
 	// Namespaces need to be deleted in the background.
@@ -182,7 +103,7 @@ func (p *purger) purge(repo, branch string) error {
 	})
 }
 
-func (p *purger) deleteResourceList(gv *schema.GroupVersion, resource *metav1.APIResource, selector labels.Selector, namespace string) ([]metav1.Object, error) {
+func (p *Purger) deleteResourceList(gv *schema.GroupVersion, resource *metav1.APIResource, selector labels.Selector, namespace string) ([]metav1.Object, error) {
 	logger := log.With(logger, "namespace", namespace, "selector", selector)
 	level.Debug(logger).Log("msg", "Getting resources to delete")
 	// Based on https://github.com/heptio/ark/blob/1210cb36e10c2cd5a27633fc71a920d6eff37052/pkg/client/dynamic.go#L49:
@@ -223,7 +144,7 @@ func (p *purger) deleteResourceList(gv *schema.GroupVersion, resource *metav1.AP
 	return retained, nil
 }
 
-func (p *purger) deleteResource(resource runtime.Unstructured, client dynamic.ResourceInterface) error {
+func (p *Purger) deleteResource(resource runtime.Unstructured, client dynamic.ResourceInterface) error {
 	metadata, err := meta.Accessor(resource)
 	if err != nil {
 		return err
@@ -231,7 +152,7 @@ func (p *purger) deleteResource(resource runtime.Unstructured, client dynamic.Re
 	name := metadata.GetName()
 	logger := log.With(logger, "name", name, "self-link", metadata.GetSelfLink())
 	logger.Log("msg", "Deleting")
-	if *dryRun {
+	if p.DryRun {
 		return nil
 	}
 	propagationPolicy := metav1.DeletePropagationForeground

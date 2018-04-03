@@ -159,7 +159,15 @@ func (p *Purger) PurgeBranchless() error {
 	if err != nil {
 		return err
 	}
+
+	level.Debug(logger).Log("msg", "Found namespaces", "selector", selector.String(), "namespaces", fmt.Sprintf("%v", namespaces.Items))
 	for _, namespace := range namespaces.Items {
+		logger := log.With(logger, "namespace", namespace.ObjectMeta.Name, "selector", selector.String())
+		if _, ok := namespace.GetAnnotations()[p.SelectorKey]; !ok {
+			level.Debug(logger).Log("msg", "namespace not tagged, skipping")
+			continue
+		}
+		namespaceInUse := false
 		_, err := p.HandleResources(namespace.ObjectMeta.Name, selector, func(resource runtime.Unstructured, client dynamic.ResourceInterface) error {
 			metadata, err := meta.Accessor(resource)
 			if err != nil {
@@ -172,10 +180,11 @@ func (p *Purger) PurgeBranchless() error {
 
 			exists, err := git.BranchExists(repo, namespace.ObjectMeta.Name)
 			if err != nil {
-				return err
+				return errors.WithStack(err)
 			}
 			if exists {
 				level.Debug(logger).Log("msg", "branch still exists")
+				namespaceInUse = true
 			} else {
 				level.Debug(logger).Log("msg", "branch not found, deleting resource")
 				if err := p.deleteResource(resource, client); err != nil {
@@ -184,6 +193,9 @@ func (p *Purger) PurgeBranchless() error {
 			}
 			return nil
 		})
+		if !namespaceInUse {
+			p.deleteNamespace(namespace.ObjectMeta.Name)
+		}
 		if err != nil {
 			return err
 		}
@@ -225,7 +237,11 @@ func (p *Purger) Purge(repo, branch string) error {
 		level.Info(logger).Log("msg", "Found resources labeled for other repos, keeping namespace", "resourcesLabeled", resourcesLabeled)
 		return nil
 	}
-	level.Debug(logger).Log("msg", "Deleting empty namespace")
+	return p.deleteNamespace(namespace)
+}
+
+func (p *Purger) deleteNamespace(namespace string) error {
+	level.Debug(logger).Log("msg", "Deleting empty namespace", "namespace", namespace)
 	if p.DryRun {
 		return nil
 	}

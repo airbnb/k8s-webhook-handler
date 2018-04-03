@@ -1,3 +1,4 @@
 cmd/webhook/webhook
+cmd/reconciler/reconciler
 vendor/*
 !vendor/vendor.json

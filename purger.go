@@ -6,7 +6,6 @@ import (
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
-
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -20,6 +19,8 @@ import (
 	"k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+
+	"github.com/itskoko/k8s-ci-purger/git"
 )
 
 // interface so we can mock ClientPool in tests
@@ -110,7 +111,6 @@ func (p *Purger) HandleResources(namespace string, selector labels.Selector, han
 				return nil, errors.WithStack(err)
 			}
 			unhandled = append(unhandled, uh...)
-			level.Debug(logger).Log("msg", "Unhandled objects", "objects", unhandled)
 		}
 	}
 	return unhandled, nil
@@ -148,9 +148,60 @@ func (p *Purger) FindResourcesAll() ([]runtime.Unstructured, error) {
 	return resources, nil
 }
 
+func (p *Purger) PurgeBranchless() error {
+	req, err := labels.NewRequirement(p.SelectorKey, selection.Exists, nil)
+	if err != nil {
+		return err
+	}
+	selector := labels.NewSelector().Add(*req)
+
+	namespaces, err := p.Clientset.CoreV1().Namespaces().List(metav1.ListOptions{})
+	if err != nil {
+		return err
+	}
+	for _, namespace := range namespaces.Items {
+		_, err := p.HandleResources(namespace.ObjectMeta.Name, selector, func(resource runtime.Unstructured, client dynamic.ResourceInterface) error {
+			metadata, err := meta.Accessor(resource)
+			if err != nil {
+				return err
+			}
+			ls := labels.Set(metadata.GetLabels())
+			name := metadata.GetName()
+			repo := fmt.Sprintf("git@github.com:%s.git", labelValueToRepo(ls.Get(p.SelectorKey)))
+			logger := log.With(logger, "name", name, "self-link", metadata.GetSelfLink(), "repo", repo)
+
+			exists, err := git.BranchExists(repo, namespace.ObjectMeta.Name)
+			if err != nil {
+				return err
+			}
+			if exists {
+				level.Debug(logger).Log("msg", "branch still exists")
+			} else {
+				level.Debug(logger).Log("msg", "branch not found, deleting resource")
+				if err := p.deleteResource(resource, client); err != nil {
+					return errors.WithStack(err)
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func repoToLabelValue(repo string) string {
+	return strings.Replace(repo, "/", ".", -1) // label values may not contain /
+}
+
+func labelValueToRepo(lv string) string {
+	return strings.Replace(lv, ".", "/", -1)
+}
+
 func (p *Purger) Purge(repo, branch string) error {
 	// Map repo to label selector value and branch to namespace
-	selectorVal := strings.Replace(repo, "/", ".", -1) // label values may not contain /
+	selectorVal := repoToLabelValue(repo)
 	namespace := branch
 	selector, err := p.NewSelector(selectorVal)
 	if err != nil {

@@ -5,6 +5,11 @@ and are in a namespace matching the branch name.
 If there are no other objects with the given label key in the namespace, it also
 deletes the namespace and all remaining objects.
 
+## Binaries
+- cmd/webhook is the actual webhook handling server
+- cmd/reconciler iterates over all k8s namespaces and deletes all objects that
+  are labeled for which there is no remote branch anymore.
+
 ## Usage
 Currently only github delete webhooks in json format are supported.
 Beside the manifests and templates in `deploy/`, a secret 'k8s-ci' with

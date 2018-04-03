@@ -10,10 +10,6 @@ import (
 	"github.com/go-kit/kit/log/level"
 	"github.com/go-kit/kit/metrics/statsd"
 	"github.com/pkg/errors"
-	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 
 	purger "github.com/itskoko/k8s-ci-purger"
 )
@@ -34,13 +30,6 @@ var (
 	logger = log.With(log.NewLogfmtLogger(log.NewSyncWriter(os.Stderr)), "caller", log.Caller(5))
 )
 
-func configure() (config *rest.Config, err error) {
-	if *kubeconfig != "" {
-		return clientcmd.BuildConfigFromFlags("", *kubeconfig)
-	}
-	return rest.InClusterConfig()
-}
-
 func fatal(err error) {
 	// FIXME: override caller, not add it
 	logger := log.With(logger, "caller", log.Caller(4))
@@ -59,22 +48,9 @@ func main() {
 	} else {
 		logger = level.NewFilter(logger, level.AllowInfo())
 	}
-	config, err := configure()
+	p, err := purger.New(*kubeconfig, *sourceSelectorKey, *dryRun)
 	if err != nil {
 		fatal(err)
-	}
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		fatal(err)
-	}
-
-	statsdClient := statsd.New("k8s-ci-purger.", logger)
-	p := &purger.Purger{
-		DryRun:             *dryRun,
-		DiscoveryInterface: clientset.Discovery(),
-		NamespaceInterface: clientset.CoreV1().Namespaces(),
-		ClientPool:         dynamic.NewDynamicClientPool(config),
-		SelectorKey:        *sourceSelectorKey,
 	}
 	if *sourceSelectorVal != "" {
 		if err := p.Purge(*sourceSelectorVal, *namespace); err != nil {
@@ -85,6 +61,7 @@ func main() {
 
 	ticker := time.NewTicker(*statsdInterval)
 	defer ticker.Stop()
+	statsdClient := statsd.New("k8s-ci-purger.", logger)
 	go statsdClient.SendLoop(ticker.C, *statsdProto, *statsdAddress)
 
 	http.Handle("/", purger.NewGithubHook(p, []byte(githubSecret), statsdClient))

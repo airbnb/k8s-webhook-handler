@@ -16,7 +16,10 @@ import (
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 // interface so we can mock ClientPool in tests
@@ -30,6 +33,32 @@ type Purger struct {
 	v1.NamespaceInterface
 	ClientPool  clientForGroupVersionKinder
 	SelectorKey string
+}
+
+func configure(kubeconfig string) (config *rest.Config, err error) {
+	if kubeconfig != "" {
+		return clientcmd.BuildConfigFromFlags("", kubeconfig)
+	}
+	return rest.InClusterConfig()
+}
+
+func New(kubeconfig, selectorKey string, dryRun bool) (*Purger, error) {
+	config, err := configure(kubeconfig)
+	if err != nil {
+		return nil, err
+	}
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Purger{
+		DryRun:             dryRun,
+		DiscoveryInterface: clientset.Discovery(),
+		NamespaceInterface: clientset.CoreV1().Namespaces(),
+		ClientPool:         dynamic.NewDynamicClientPool(config),
+		SelectorKey:        selectorKey,
+	}, nil
 }
 
 func (p *Purger) NewSelector(val string) (labels.Selector, error) {

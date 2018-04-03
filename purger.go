@@ -31,6 +31,7 @@ type Purger struct {
 	DryRun bool
 	discovery.DiscoveryInterface
 	v1.NamespaceInterface
+	*kubernetes.Clientset
 	ClientPool  clientForGroupVersionKinder
 	SelectorKey string
 }
@@ -54,6 +55,7 @@ func New(kubeconfig, selectorKey string, dryRun bool) (*Purger, error) {
 
 	return &Purger{
 		DryRun:             dryRun,
+		Clientset:          clientset,
 		DiscoveryInterface: clientset.Discovery(),
 		NamespaceInterface: clientset.CoreV1().Namespaces(),
 		ClientPool:         dynamic.NewDynamicClientPool(config),
@@ -70,33 +72,32 @@ func (p *Purger) NewSelector(val string) (labels.Selector, error) {
 	return labels.NewSelector().Add(*req), nil
 }
 
-func (p *Purger) Purge(repo, branch string) error {
-	// Map repo to label selector value and branch to namespace
-	selectorVal := strings.Replace(repo, "/", ".", -1) // label values may not contain /
-	namespace := branch
-
+func (p *Purger) APIResources() ([]*metav1.APIResourceList, error) {
 	preferredResources, err := p.DiscoveryInterface.ServerPreferredResources()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	resourceLists := discovery.FilteredBy(
+	return discovery.FilteredBy(
 		discovery.ResourcePredicateFunc(func(groupVersion string, r *metav1.APIResource) bool {
 			return discovery.SupportsAllVerbs{Verbs: []string{"list", "create"}}.Match(groupVersion, r)
 		}),
 		preferredResources,
-	)
+	), nil
+}
+
+type resourceHandlerFn func(resource runtime.Unstructured, client dynamic.ResourceInterface) error
+
+func (p *Purger) HandleResources(namespace string, selector labels.Selector, handler resourceHandlerFn) ([]metav1.Object, error) {
+	resourceLists, err := p.APIResources()
 	if err != nil {
-		return errors.WithStack(err)
+		return nil, errors.WithStack(err)
 	}
-	selector, err := p.NewSelector(selectorVal)
-	if err != nil {
-		return errors.WithStack(err)
-	}
-	resourcesLabeled := 0
+
+	unhandled := []metav1.Object{}
 	for _, resourceList := range resourceLists {
 		gv, err := schema.ParseGroupVersion(resourceList.GroupVersion)
 		if err != nil {
-			return errors.WithStack(err)
+			return nil, errors.WithStack(err)
 		}
 		for _, resource := range resourceList.APIResources {
 			if !resource.Namespaced {
@@ -104,17 +105,69 @@ func (p *Purger) Purge(repo, branch string) error {
 				continue
 			}
 
-			retained, err := p.deleteResourceList(&gv, &resource, selector, namespace)
+			uh, err := p.findAndHandleResource(&gv, &resource, selector, namespace, handler)
 			if err != nil {
-				return errors.WithStack(err)
+				return nil, errors.WithStack(err)
 			}
-			for _, metadata := range retained {
-				ls := labels.Set(metadata.GetLabels())
-				if ls.Has(p.SelectorKey) {
-					resourcesLabeled++
-					level.Debug(logger).Log("msg", "Found resource labeled for other repo", "repo", ls.Get(p.SelectorKey))
-				}
-			}
+			unhandled = append(unhandled, uh...)
+			level.Debug(logger).Log("msg", "Unhandled objects", "objects", unhandled)
+		}
+	}
+	return unhandled, nil
+}
+
+func (p *Purger) FindResources(namespace string) ([]runtime.Unstructured, error) {
+	req, err := labels.NewRequirement(p.SelectorKey, selection.Exists, nil)
+	if err != nil {
+		return nil, err
+	}
+	selector := labels.NewSelector().Add(*req)
+
+	resources := []runtime.Unstructured{}
+	unhandled, err := p.HandleResources(namespace, selector, func(resource runtime.Unstructured, client dynamic.ResourceInterface) error {
+		resources = append(resources, resource)
+		return nil
+	})
+	level.Debug(logger).Log("msg", "Unhandled objects", "objects", unhandled)
+	return resources, err
+}
+
+func (p *Purger) FindResourcesAll() ([]runtime.Unstructured, error) {
+	resources := []runtime.Unstructured{}
+	namespaces, err := p.Clientset.CoreV1().Namespaces().List(metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	for _, namespace := range namespaces.Items {
+		res, err := p.FindResources(namespace.ObjectMeta.Name)
+		if err != nil {
+			return nil, err
+		}
+		resources = append(resources, res...)
+	}
+	return resources, nil
+}
+
+func (p *Purger) Purge(repo, branch string) error {
+	// Map repo to label selector value and branch to namespace
+	selectorVal := strings.Replace(repo, "/", ".", -1) // label values may not contain /
+	namespace := branch
+	selector, err := p.NewSelector(selectorVal)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+
+	retained, err := p.HandleResources(namespace, selector, p.deleteResource)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+
+	resourcesLabeled := 0
+	for _, metadata := range retained {
+		ls := labels.Set(metadata.GetLabels())
+		if ls.Has(p.SelectorKey) {
+			resourcesLabeled++
+			level.Debug(logger).Log("msg", "Found resource labeled for other repo", "repo", ls.Get(p.SelectorKey))
 		}
 	}
 	if resourcesLabeled > 0 {
@@ -132,9 +185,9 @@ func (p *Purger) Purge(repo, branch string) error {
 	})
 }
 
-func (p *Purger) deleteResourceList(gv *schema.GroupVersion, resource *metav1.APIResource, selector labels.Selector, namespace string) ([]metav1.Object, error) {
+func (p *Purger) findAndHandleResource(gv *schema.GroupVersion, resource *metav1.APIResource, selector labels.Selector, namespace string, handlerFn resourceHandlerFn) ([]metav1.Object, error) {
 	logger := log.With(logger, "namespace", namespace, "selector", selector)
-	level.Debug(logger).Log("msg", "Getting resources to delete")
+	level.Debug(logger).Log("msg", "Getting resources")
 	// Based on https://github.com/heptio/ark/blob/1210cb36e10c2cd5a27633fc71a920d6eff37052/pkg/client/dynamic.go#L49:
 	// > client-go doesn't actually use the kind when getting the dynamic client from the client pool;
 	// > it only needs the group and version.
@@ -151,9 +204,8 @@ func (p *Purger) deleteResourceList(gv *schema.GroupVersion, resource *metav1.AP
 	if err != nil {
 		return nil, fmt.Errorf("Couldn't extract list: %s", err)
 	}
-	retained := []metav1.Object{}
+	unhandled := []metav1.Object{}
 	for _, resource := range resources {
-		// metav1.ListOptions{LabelSelector: selector})
 		unstructured, ok := resource.(runtime.Unstructured)
 		if !ok {
 			return nil, fmt.Errorf("Unexpected type for %v", resource)
@@ -163,16 +215,17 @@ func (p *Purger) deleteResourceList(gv *schema.GroupVersion, resource *metav1.AP
 			return nil, fmt.Errorf("Couldn't get metadata for %v: %s", unstructured, err)
 		}
 		if selector.Matches(labels.Set(metadata.GetLabels())) {
-			if err := p.deleteResource(unstructured, rclient); err != nil {
-				return nil, fmt.Errorf("Couldn't delete resource: %s", err)
+			if err := handlerFn(unstructured, rclient); err != nil {
+				return nil, fmt.Errorf("Handler failed: %s", err)
 			}
 		} else {
-			retained = append(retained, metadata)
+			unhandled = append(unhandled, metadata)
 		}
 	}
-	return retained, nil
+	return unhandled, nil
 }
 
+// deleteResource implements resourceHandlerFn
 func (p *Purger) deleteResource(resource runtime.Unstructured, client dynamic.ResourceInterface) error {
 	metadata, err := meta.Accessor(resource)
 	if err != nil {

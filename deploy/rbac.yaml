@@ -1,0 +1,26 @@
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRole
+metadata:
+  name: k8s-ci-purger
+rules:
+- apiGroups: ["*"]
+  resources: ["*"]
+  verbs: ["get", "list", "delete"]
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: k8s-ci-purger
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  name: k8s-ci-purger
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: k8s-ci-purger
+subjects:
+- kind: ServiceAccount
+  name: k8s-ci-purger
+  namespace: default

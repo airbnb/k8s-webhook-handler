@@ -1,0 +1,17 @@
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: k8s-ci-purger
+spec:
+  tls:
+    - hosts:
+        - k8s-ci.int.example.com
+      secretName: k8s-ci.int.example.com
+  rules:
+    - host: k8s-ci.int.example.com
+      http:
+        paths:
+          - backend:
+              serviceName: k8s-ci-purger
+              servicePort: 80

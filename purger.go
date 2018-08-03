@@ -246,7 +246,7 @@ func (p *Purger) deleteNamespace(namespace string) error {
 		return nil
 	}
 	// Namespaces need to be deleted in the background.
-	propagationPolicy := metav1.DeletePropagationBackground
+	propagationPolicy := metav1.DeletePropagationOrphan
 	return p.NamespaceInterface.Delete(namespace, &metav1.DeleteOptions{
 		PropagationPolicy: &propagationPolicy,
 	})

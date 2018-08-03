@@ -10,5 +10,5 @@ RUN go test $(go list ./... | grep -v /vendor/) \
 FROM alpine:3.6
 RUN apk add --update ca-certificates && adduser -D user
 USER user
-COPY --from=0 /go/bin/webhook /usr/bin/
+COPY --from=0 /go/bin/* /usr/bin/
 ENTRYPOINT [ "webhook" ]

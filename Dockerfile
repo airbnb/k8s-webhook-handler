@@ -8,7 +8,7 @@ RUN go test $(go list ./... | grep -v /vendor/) \
   && CGO_ENABLED=0 go install ./...
 
 FROM alpine:3.6
-RUN apk add --update ca-certificates && adduser -D user
+RUN apk add --update ca-certificates git && adduser -D user
 USER user
 COPY --from=0 /go/bin/* /usr/bin/
 ENTRYPOINT [ "webhook" ]

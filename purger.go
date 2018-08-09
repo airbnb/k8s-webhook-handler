@@ -193,11 +193,11 @@ func (p *Purger) PurgeBranchless() error {
 			}
 			return nil
 		})
-		if !namespaceInUse {
-			p.deleteNamespace(namespace.ObjectMeta.Name)
-		}
 		if err != nil {
 			return err
+		}
+		if !namespaceInUse {
+			p.deleteNamespace(namespace.ObjectMeta.Name)
 		}
 	}
 	return nil

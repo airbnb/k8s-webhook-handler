@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -20,16 +21,9 @@ import (
 	"k8s.io/client-go/kubernetes"
 	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/itskoko/k8s-webhook-handler/git"
 )
-
-// interface so we can mock ClientPool in tests
-/*
-type clientForGroupVersionKinder interface {
-	ClientForGroupVersionKind(kind schema.GroupVersionKind) (dynamic.Interface, error)
-}*/
 
 type DeleteHandler struct {
 	logger log.Logger
@@ -41,24 +35,13 @@ type DeleteHandler struct {
 	SelectorKey string
 }
 
-func configure(kubeconfig string) (config *rest.Config, err error) {
-	if kubeconfig != "" {
-		return clientcmd.BuildConfigFromFlags("", kubeconfig)
-	}
-	return rest.InClusterConfig()
-}
-
-func NewDeleteHandler(logger log.Logger, kubeconfig, selectorKey string, dryRun bool) (*DeleteHandler, error) {
-	config, err := configure(kubeconfig)
-	if err != nil {
-		return nil, err
-	}
-	clientset, err := kubernetes.NewForConfig(config)
+func NewDeleteHandler(logger log.Logger, kconfig *rest.Config, selectorKey string, dryRun bool) (*DeleteHandler, error) {
+	clientset, err := kubernetes.NewForConfig(kconfig)
 	if err != nil {
 		return nil, err
 	}
 
-	intf, err := dynamic.NewForConfig(config)
+	intf, err := dynamic.NewForConfig(kconfig)
 	if err != nil {
 		return nil, err
 	}
@@ -221,7 +204,7 @@ func labelValueToRepo(lv string) string {
 	return strings.Replace(lv, ".", "/", -1)
 }
 
-func (p *DeleteHandler) Handle(ev *github.DeleteEvent) (*handlerResponse, error) {
+func (p *DeleteHandler) Handle(_ context.Context, ev *github.DeleteEvent) (*handlerResponse, error) {
 	var (
 		repo   = *ev.Repo.FullName
 		branch = *ev.Ref

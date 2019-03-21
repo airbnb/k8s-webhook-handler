@@ -29,11 +29,11 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.hostIP
-            - name: GITHUB_SECRET
+            - name: WEBHOOK_SECRET
               valueFrom:
                 secretKeyRef:
                   name: k8s-ci
-                  key: GITHUB_SECRET
+                  key: WEBHOOK_SECRET
           ports:
           - containerPort: 8080
             name: http

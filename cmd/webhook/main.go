@@ -9,7 +9,6 @@ import (
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/go-kit/kit/metrics/statsd"
-	"github.com/pkg/errors"
 
 	handler "github.com/itskoko/k8s-webhook-handler"
 )
@@ -20,6 +19,8 @@ var (
 	namespace         = flag.String("ns", "stage", "Namespace to use when -source-selector is given")
 	kubeconfig        = flag.String("kubeconfig", "", "If set, use this kubeconfig to connect to kubernetes")
 	dryRun            = flag.Bool("dry", false, "Enable dry-run, print resources instead of deleting them")
+	baseURL           = flag.String("gh-base-url", "", "GitHub Enterprise: Base URL")
+	uploadURL         = flag.String("gh-upload-url", "", "GitHub Enterprise: Upload URL")
 	debug             = flag.Bool("debug", false, "Enable debug logging")
 
 	statsdAddress  = flag.String("statsd.address", "localhost:8125", "Address to send statsd metrics to")
@@ -38,16 +39,29 @@ func fatal(err error) {
 
 func main() {
 	flag.Parse()
-	githubSecret := os.Getenv("GITHUB_SECRET")
-	if githubSecret == "" {
-		fatal(errors.New("GITHUB_SECRET env variable required"))
-	}
+	githubSecret := os.Getenv("WEBHOOK_SECRET")
 	if *debug {
 		logger = level.NewFilter(logger, level.AllowAll())
 	} else {
 		logger = level.NewFilter(logger, level.AllowInfo())
 	}
-	dh, err := handler.NewDeleteHandler(logger, *kubeconfig, *sourceSelectorKey, *dryRun)
+
+	kconfig, err := handler.NewKubernetesConfig(*kubeconfig)
+	if err != nil {
+		fatal(err)
+	}
+
+	dh, err := handler.NewDeleteHandler(logger, kconfig, *sourceSelectorKey, *dryRun)
+	if err != nil {
+		fatal(err)
+	}
+
+	ghClient, err := handler.NewGitHubClient(os.Getenv("GITHUB_TOKEN"), *baseURL, *uploadURL)
+	if err != nil {
+		fatal(err)
+	}
+
+	ph, err := handler.NewPushHandler(logger, kconfig, ghClient)
 	if err != nil {
 		fatal(err)
 	}
@@ -57,6 +71,11 @@ func main() {
 	statsdClient := statsd.New("k8s-ci-purger.", logger)
 	go statsdClient.SendLoop(ticker.C, *statsdProto, *statsdAddress)
 
-	http.Handle("/", handler.NewGithubHook(dh, []byte(githubSecret), statsdClient))
+	h := handler.NewGithubHookHandler([]byte(githubSecret), statsdClient)
+	h.DeleteHandler = dh
+	h.PushHandler = ph
+
+	http.Handle("/", h)
+	level.Info(logger).Log("msg", "Start listening", "addr", *listenAddr)
 	fatal(http.ListenAndServe(*listenAddr, nil))
 }

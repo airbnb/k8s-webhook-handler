@@ -12,8 +12,9 @@ import (
 	"github.com/google/go-github/v24/github"
 )
 
-type hook struct {
+type Handler struct {
 	*DeleteHandler
+	*PushHandler
 	secret []byte
 
 	requestCounter metrics.Counter
@@ -21,9 +22,8 @@ type hook struct {
 	callDuration   metrics.Histogram
 }
 
-func NewGithubHook(dh *DeleteHandler, secret []byte, statsdClient *statsd.Statsd) *hook {
-	return &hook{
-		DeleteHandler:  dh,
+func NewGithubHookHandler(secret []byte, statsdClient *statsd.Statsd) *Handler {
+	return &Handler{
 		secret:         secret,
 		requestCounter: statsdClient.NewCounter("requests", 1.0),
 		errorCounter:   statsdClient.NewCounter("errors", 1.0),
@@ -31,22 +31,35 @@ func NewGithubHook(dh *DeleteHandler, secret []byte, statsdClient *statsd.Statsd
 	}
 }
 
-func (h *hook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer func(begin time.Time) { h.callDuration.Observe(time.Since(begin).Seconds()) }(time.Now())
 	logger := log.With(logger, "client", r.RemoteAddr)
 	h.requestCounter.Add(1)
 	hr, err := h.handle(w, r)
+	if hr == nil {
+		hr = &handlerResponse{}
+	}
 	if err != nil {
 		h.errorCounter.Add(1)
 		level.Error(logger).Log("msg", err)
-	}
-	if hr.status == 0 {
-		hr.status = http.StatusInternalServerError
+		if hr.status == 0 {
+			hr.status = http.StatusInternalServerError
+		}
+		if hr.message == "" {
+			hr.message = err.Error()
+		}
+	} else {
+		if hr.status == 0 {
+			hr.status = http.StatusOK
+		}
+		if hr.message == "" {
+			hr.message = "Webhook handled successfully"
+		}
 	}
 	http.Error(w, hr.message, hr.status)
 }
 
-func (h *hook) handle(w http.ResponseWriter, r *http.Request) (*handlerResponse, error) {
+func (h *Handler) handle(w http.ResponseWriter, r *http.Request) (*handlerResponse, error) {
 	if r.Method != http.MethodPost {
 		return &handlerResponse{http.StatusBadRequest, "Method not supported"}, nil
 	}
@@ -60,12 +73,19 @@ func (h *hook) handle(w http.ResponseWriter, r *http.Request) (*handlerResponse,
 		return &handlerResponse{http.StatusBadRequest, "Couldn't parse webhook"}, err
 	}
 
-	logger := log.With(logger, "payload", fmt.Sprintf("%v", payload))
-
+	errNotRegistered := fmt.Errorf("No handler for event %T registered", event)
 	switch e := event.(type) {
 	case *github.DeleteEvent:
-		level.Debug(logger).Log("msg", "Handling DeleteEvent webhook")
-		return h.DeleteHandler.Handle(e)
+		if h.DeleteHandler == nil {
+			return &handlerResponse{http.StatusBadRequest, errNotRegistered.Error()}, errNotRegistered
+		}
+		return h.DeleteHandler.Handle(r.Context(), e)
+	case *github.PushEvent:
+		if h.PushHandler == nil {
+			return &handlerResponse{http.StatusBadRequest, errNotRegistered.Error()}, errNotRegistered
+		}
+		return h.PushHandler.Handle(r.Context(), e)
+
 	default:
 		return &handlerResponse{http.StatusBadRequest, "Webhook not supported"}, nil
 	}

@@ -1,7 +1,7 @@
 apiVersion: rbac.authorization.k8s.io/v1beta1
 kind: ClusterRole
 metadata:
-  name: k8s-ci-purger
+  name: k8s-webhook-handler
 rules:
 - apiGroups: ["*"]
   resources: ["*"]
@@ -10,17 +10,17 @@ rules:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: k8s-ci-purger
+  name: k8s-webhook-handler
 ---
 apiVersion: rbac.authorization.k8s.io/v1beta1
 kind: ClusterRoleBinding
 metadata:
-  name: k8s-ci-purger
+  name: k8s-webhook-handler
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: k8s-ci-purger
+  name: k8s-webhook-handler
 subjects:
 - kind: ServiceAccount
-  name: k8s-ci-purger
+  name: k8s-webhook-handler
   namespace: default

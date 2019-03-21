@@ -2,24 +2,24 @@ apiVersion: extensions/v1beta1
 kind: Deployment
 metadata:
   labels:
-    k8s-app: k8s-ci-purger
-  name: k8s-ci-purger
+    k8s-app: k8s-webhook-handler
+  name: k8s-webhook-handler
 spec:
   selector:
     matchLabels:
-      k8s-app: k8s-ci-purger
+      k8s-app: k8s-webhook-handler
   template:
     metadata:
       labels:
-        k8s-app: k8s-ci-purger
-      name: k8s-ci-purger
+        k8s-app: k8s-webhook-handler
+      name: k8s-webhook-handler
     spec:
-      serviceAccountName: k8s-ci-purger
+      serviceAccountName: k8s-webhook-handler
       imagePullSecrets:
         - name: private-registry
       containers:
-        - name: k8s-ci-purger
-          image: itskoko/k8s-ci-purger
+        - name: k8s-webhook-handler
+          image: itskoko/k8s-webhook-handler
           command:
             - /bin/sh
             - -c

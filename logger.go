@@ -1,4 +1,4 @@
-package purger
+package handler
 
 import (
 	"os"

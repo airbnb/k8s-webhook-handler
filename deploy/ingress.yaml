@@ -2,7 +2,7 @@
 apiVersion: extensions/v1beta1
 kind: Ingress
 metadata:
-  name: k8s-ci-purger
+  name: k8s-webhook-handler
 spec:
   tls:
     - hosts:
@@ -13,5 +13,5 @@ spec:
       http:
         paths:
           - backend:
-              serviceName: k8s-ci-purger
+              serviceName: k8s-webhook-handler
               servicePort: 80

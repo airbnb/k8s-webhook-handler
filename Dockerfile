@@ -1,11 +1,9 @@
-FROM golang:1.9
-RUN go get -u github.com/kardianos/govendor
-WORKDIR /go/src/github.com/itskoko/k8s-ci-purger
-COPY vendor/ vendor/
-RUN govendor sync
+FROM golang:1.12 AS build-env
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod tidy
 COPY . .
-RUN go test $(go list ./... | grep -v /vendor/) \
-  && CGO_ENABLED=0 go install ./...
+RUN go build ./... && go install ./...
 
 FROM alpine:3.6
 RUN apk add --update ca-certificates git openssh-client \

@@ -3,16 +3,15 @@ package main
 import (
 	"testing"
 
+	handler "github.com/itskoko/k8s-webhook-handler"
 	"k8s.io/apimachinery/pkg/labels"
-
-	purger "github.com/itskoko/k8s-ci-purger"
 )
 
 func TestSelector(t *testing.T) {
-	p := &purger.Purger{
+	dh := &handler.DeleteHandler{
 		SelectorKey: "ci-source-repo",
 	}
-	selector, err := p.NewSelector("foo")
+	selector, err := dh.NewSelector("foo")
 	if err != nil {
 		t.Fatal(err)
 	}

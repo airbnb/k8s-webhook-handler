@@ -11,13 +11,12 @@ import (
 	"github.com/go-kit/kit/metrics/statsd"
 	"github.com/pkg/errors"
 
-	purger "github.com/itskoko/k8s-ci-purger"
+	handler "github.com/itskoko/k8s-webhook-handler"
 )
 
 var (
 	listenAddr        = flag.String("l", ":8080", "Address to listen on for webhook requests")
 	sourceSelectorKey = flag.String("sk", "ci-source-repo", "Label key that identifies source repo")
-	sourceSelectorVal = flag.String("sv", "", "If set, delete all resources matching this selector and exit")
 	namespace         = flag.String("ns", "stage", "Namespace to use when -source-selector is given")
 	kubeconfig        = flag.String("kubeconfig", "", "If set, use this kubeconfig to connect to kubernetes")
 	dryRun            = flag.Bool("dry", false, "Enable dry-run, print resources instead of deleting them")
@@ -48,15 +47,9 @@ func main() {
 	} else {
 		logger = level.NewFilter(logger, level.AllowInfo())
 	}
-	p, err := purger.New(*kubeconfig, *sourceSelectorKey, *dryRun)
+	dh, err := handler.NewDeleteHandler(logger, *kubeconfig, *sourceSelectorKey, *dryRun)
 	if err != nil {
 		fatal(err)
-	}
-	if *sourceSelectorVal != "" {
-		if err := p.Purge(*sourceSelectorVal, *namespace); err != nil {
-			fatal(err)
-		}
-		os.Exit(0)
 	}
 
 	ticker := time.NewTicker(*statsdInterval)
@@ -64,6 +57,6 @@ func main() {
 	statsdClient := statsd.New("k8s-ci-purger.", logger)
 	go statsdClient.SendLoop(ticker.C, *statsdProto, *statsdAddress)
 
-	http.Handle("/", purger.NewGithubHook(p, []byte(githubSecret), statsdClient))
+	http.Handle("/", handler.NewGithubHook(dh, []byte(githubSecret), statsdClient))
 	fatal(http.ListenAndServe(*listenAddr, nil))
 }

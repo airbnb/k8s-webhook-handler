@@ -1,4 +1,4 @@
-package purger
+package handler
 
 import (
 	"fmt"
@@ -7,22 +7,11 @@ import (
 	"testing"
 
 	"github.com/go-kit/kit/metrics/statsd"
-	"github.com/google/go-github/github"
-	"k8s.io/api/core/v1"
+	"github.com/google/go-github/v24/github"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	dfake "k8s.io/client-go/dynamic/fake"
 	fake "k8s.io/client-go/kubernetes/fake"
 )
-
-// // We need to wrap discoveryFake.FakeDiscovery to implemented ServerPreferredResources()
-// type fakeDiscovery struct {
-// 	discoveryFake.FakeDiscovery
-// }
-//
-// func (c *fakeDiscovery) ServerPreferredResources() ([]*metav1.APIResourceList, error) {
-// 	logger.Log("msg", "here", "resources", fmt.Sprintf("%v", c.FakeDiscovery.Fake.Resources))
-// 	return c.Fake.Resources, nil
-// }
 
 func TestHandleDelete(t *testing.T) {
 	repo := "foo/bar"
@@ -46,13 +35,12 @@ func TestHandleDelete(t *testing.T) {
 	// ServerPreferredResources() returns nothing and breaks the purger
 	t.Log(discoveryInterface.ServerPreferredResources())
 	t.Log(clientset.Fake.Resources)
-	p := &Purger{
+	p := &DeleteHandler{
 		DiscoveryInterface: discoveryInterface,
 		NamespaceInterface: clientset.CoreV1().Namespaces(),
-		ClientPool:         &dfake.FakeClientPool{Fake: clientset.Fake},
 		SelectorKey:        selectorKey,
 	}
-	h := NewGithubHook(p, []byte("foo"), statsd.New("k8s-ci-purger.", logger))
+	h := NewGithubHook(p, []byte("foo"), statsd.New("k8s-foobar.", logger))
 
 	payload := github.DeleteEvent{
 		RefType: &refType,

@@ -4,6 +4,7 @@ metadata:
   labels:
     k8s-app: k8s-webhook-handler
   name: k8s-webhook-handler
+  namespace: ci
 spec:
   selector:
     matchLabels:
@@ -15,25 +16,20 @@ spec:
       name: k8s-webhook-handler
     spec:
       serviceAccountName: k8s-webhook-handler
-      imagePullSecrets:
-        - name: private-registry
       containers:
         - name: k8s-webhook-handler
-          image: itskoko/k8s-webhook-handler
-          command:
-            - /bin/sh
-            - -c
-            - exec webhook -statsd.address $HOST_IP:8125
+          image: itskoko/k8s-webhook-handler:v0.1.0
           env:
-            - name: HOST_IP
-              valueFrom:
-                fieldRef:
-                  fieldPath: status.hostIP
             - name: WEBHOOK_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: k8s-ci
+                  name: webhook-handler
                   key: WEBHOOK_SECRET
+            - name: GITHUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: webhook-handler
+                  key: GITHUB_TOKEN
           ports:
           - containerPort: 8080
             name: http

@@ -29,6 +29,7 @@ type PushHandler struct {
 	*kubernetes.Clientset
 	secret       []byte
 	ResourcePath string
+	Namespace    string
 	meta.RESTMapper
 }
 
@@ -85,11 +86,11 @@ func (h *PushHandler) Handle(ctx context.Context, event *github.PushEvent) (*han
 	}
 	acr := meta.NewAccessor()
 	acr.SetAnnotations(obj, map[string]string{
-		"ref":       *event.Ref,
-		"revision":  *event.HeadCommit.ID,
-		"repo_name": *event.Repo.FullName,
-		"repo_url":  *event.Repo.GitURL,
-		"repo_ssh":  *event.Repo.SSHURL,
+		annotationPrefix + "ref":       *event.Ref,
+		annotationPrefix + "revision":  *event.HeadCommit.ID,
+		annotationPrefix + "repo_name": *event.Repo.FullName,
+		annotationPrefix + "repo_url":  *event.Repo.GitURL,
+		annotationPrefix + "repo_ssh":  *event.Repo.SSHURL,
 	})
 	level.Info(logger).Log("msg", "Downloaded manifest succesfully", "obj", obj, "content", content)
 
@@ -109,7 +110,7 @@ func (h *PushHandler) apply(obj runtime.Object) error {
 		if err != nil {
 			return err
 		}
-		if _, err := h.Interface.Resource(mapping.Resource).Namespace("default").Create(obj, metav1.CreateOptions{}); err != nil {
+		if _, err := h.Interface.Resource(mapping.Resource).Namespace(h.Namespace).Create(obj, metav1.CreateOptions{}); err != nil {
 			return err
 		}
 		level.Debug(h.logger).Log("Updated object", "obj", fmt.Sprintf("%#v", obj))

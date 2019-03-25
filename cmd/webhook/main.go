@@ -16,7 +16,7 @@ import (
 var (
 	listenAddr        = flag.String("l", ":8080", "Address to listen on for webhook requests")
 	sourceSelectorKey = flag.String("sk", "ci-source-repo", "Label key that identifies source repo")
-	namespace         = flag.String("ns", "stage", "Namespace to use when -source-selector is given")
+	namespace         = flag.String("ns", "argo-events-ci", "Namespace to deploy workflows to")
 	kubeconfig        = flag.String("kubeconfig", "", "If set, use this kubeconfig to connect to kubernetes")
 	dryRun            = flag.Bool("dry", false, "Enable dry-run, print resources instead of deleting them")
 	baseURL           = flag.String("gh-base-url", "", "GitHub Enterprise: Base URL")
@@ -65,6 +65,7 @@ func main() {
 	if err != nil {
 		fatal(err)
 	}
+	ph.Namespace = *namespace
 
 	ticker := time.NewTicker(*statsdInterval)
 	defer ticker.Stop()

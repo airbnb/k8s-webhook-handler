@@ -19,8 +19,12 @@ var (
 
 func main() {
 	flag.Parse()
-
-	dh, err := handler.NewDeleteHandler(logger, *kubeconfig, *sourceSelectorKey, *dryRun)
+	kconfig, err := handler.NewKubernetesConfig(*kubeconfig)
+	if err != nil {
+		level.Error(logger).Log("msg", "Couldn't create kubernetes config", "err", err)
+		os.Exit(1)
+	}
+	dh, err := handler.NewDeleteHandler(logger, kconfig, *sourceSelectorKey, *dryRun)
 	if err != nil {
 		level.Error(logger).Log("msg", "Couldn't create handler", "err", err)
 		os.Exit(1)

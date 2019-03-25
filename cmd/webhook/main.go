@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"net/http"
 	"os"
@@ -16,12 +17,13 @@ import (
 var (
 	listenAddr        = flag.String("l", ":8080", "Address to listen on for webhook requests")
 	sourceSelectorKey = flag.String("sk", "ci-source-repo", "Label key that identifies source repo")
-	namespace         = flag.String("ns", "argo-events-ci", "Namespace to deploy workflows to")
+	namespace         = flag.String("ns", "ci", "Namespace to deploy workflows to")
 	kubeconfig        = flag.String("kubeconfig", "", "If set, use this kubeconfig to connect to kubernetes")
 	dryRun            = flag.Bool("dry", false, "Enable dry-run, print resources instead of deleting them")
 	baseURL           = flag.String("gh-base-url", "", "GitHub Enterprise: Base URL")
 	uploadURL         = flag.String("gh-upload-url", "", "GitHub Enterprise: Upload URL")
 	debug             = flag.Bool("debug", false, "Enable debug logging")
+	insecure          = flag.Bool("insecure", false, "Allow omitting WEBHOOK_SECRET for testing")
 
 	statsdAddress  = flag.String("statsd.address", "localhost:8125", "Address to send statsd metrics to")
 	statsdProto    = flag.String("statsd.proto", "udp", "Protocol to use for statsd")
@@ -40,6 +42,9 @@ func fatal(err error) {
 func main() {
 	flag.Parse()
 	githubSecret := os.Getenv("WEBHOOK_SECRET")
+	if githubSecret == "" && !*insecure {
+		fatal(errors.New("WEBHOOK_SECRET not set. Use -insecure to disable webhook verification"))
+	}
 	if *debug {
 		logger = level.NewFilter(logger, level.AllowAll())
 	} else {

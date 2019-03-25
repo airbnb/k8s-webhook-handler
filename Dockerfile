@@ -1,4 +1,5 @@
 FROM golang:1.12 AS build-env
+ENV CGO_ENABLED=0
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod tidy

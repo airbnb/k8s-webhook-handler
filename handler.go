@@ -15,6 +15,7 @@ import (
 type Handler struct {
 	*DeleteHandler
 	*PushHandler
+	*CheckSuiteHandler
 	secret []byte
 
 	requestCounter metrics.Counter
@@ -85,6 +86,12 @@ func (h *Handler) handle(w http.ResponseWriter, r *http.Request) (*handlerRespon
 			return &handlerResponse{http.StatusBadRequest, errNotRegistered.Error()}, errNotRegistered
 		}
 		return h.PushHandler.Handle(r.Context(), e)
+
+	case *github.CheckSuiteEvent:
+		if h.CheckSuiteHandler == nil {
+			return &handlerResponse{http.StatusBadRequest, errNotRegistered.Error()}, errNotRegistered
+		}
+		return h.CheckSuiteHandler.Handle(r.Context(), e)
 
 	default:
 		return &handlerResponse{http.StatusBadRequest, "Webhook not supported"}, nil

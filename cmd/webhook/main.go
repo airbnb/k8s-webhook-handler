@@ -72,6 +72,11 @@ func main() {
 	}
 	ph.Namespace = *namespace
 
+	csh, err := handler.NewCheckSuiteHandler(logger, ghClient)
+	if err != nil {
+		fatal(err)
+	}
+
 	ticker := time.NewTicker(*statsdInterval)
 	defer ticker.Stop()
 	statsdClient := statsd.New("k8s-ci-purger.", logger)
@@ -80,6 +85,7 @@ func main() {
 	h := handler.NewGithubHookHandler([]byte(githubSecret), statsdClient)
 	h.DeleteHandler = dh
 	h.PushHandler = ph
+	h.CheckSuiteHandler = csh
 
 	http.Handle("/", h)
 	level.Info(logger).Log("msg", "Start listening", "addr", *listenAddr)

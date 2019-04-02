@@ -19,6 +19,12 @@ added:
  - `k8s-webhook-handler.io/repo_url`: event.Repo.GitURL
  - `k8s-webhook-handler.io/repo_ssh`: event.Repo.SSHURL
 
+### CheckSuite
+On check suite (re)request events, k8s-webhook-handler creates a CheckSuite
+without further actions. It's up to the user to update/complete the CheckSuite.
+This allows for lose coupling since it doesn't require the k8s-webhook-handler
+to know about the specifics of the Check run.
+
 ## Binaries
 - cmd/webhook is the actual webhook handling server
 - cmd/reconciler iterates over all k8s namespaces and deletes all objects that

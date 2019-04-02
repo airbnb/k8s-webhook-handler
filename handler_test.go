@@ -40,7 +40,8 @@ func TestHandleDelete(t *testing.T) {
 		NamespaceInterface: clientset.CoreV1().Namespaces(),
 		SelectorKey:        selectorKey,
 	}
-	h := NewGithubHook(p, []byte("foo"), statsd.New("k8s-foobar.", logger))
+	h := NewGithubHookHandler([]byte("foo"), statsd.New("k8s-foobar.", logger))
+	h.DeleteHandler = p
 
 	payload := github.DeleteEvent{
 		RefType: &refType,

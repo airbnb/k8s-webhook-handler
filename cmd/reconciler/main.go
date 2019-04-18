@@ -13,6 +13,7 @@ var (
 	sourceSelectorKey = flag.String("sk", "ci-source-repo", "Label key that identifies source repo")
 	kubeconfig        = flag.String("kubeconfig", "", "If set, use this kubeconfig to connect to kubernetes")
 	dryRun            = flag.Bool("dry", false, "Enable dry-run, print resources instead of deleting them")
+	gitAddress        = flag.String("git", "git@github.com", "Git address")
 
 	logger = log.With(log.NewLogfmtLogger(log.NewSyncWriter(os.Stderr)), "caller", log.Caller(5))
 )
@@ -25,6 +26,7 @@ func main() {
 		os.Exit(1)
 	}
 	dh, err := handler.NewDeleteHandler(logger, kconfig, *sourceSelectorKey, *dryRun)
+	dh.GitAddress = *gitAddress
 	if err != nil {
 		level.Error(logger).Log("msg", "Couldn't create handler", "err", err)
 		os.Exit(1)

@@ -33,6 +33,7 @@ type DeleteHandler struct {
 	v1.NamespaceInterface
 	*kubernetes.Clientset
 	SelectorKey string
+	GitAddress  string
 }
 
 func NewDeleteHandler(logger log.Logger, kconfig *rest.Config, selectorKey string, dryRun bool) (*DeleteHandler, error) {
@@ -168,7 +169,7 @@ func (p *DeleteHandler) PurgeBranchless() error {
 			}
 			ls := labels.Set(metadata.GetLabels())
 			name := metadata.GetName()
-			repo := fmt.Sprintf("git@github.com:%s.git", labelValueToRepo(ls.Get(p.SelectorKey)))
+			repo := fmt.Sprintf("%s:%s.git", p.GitAddress, labelValueToRepo(ls.Get(p.SelectorKey)))
 			logger := log.With(logger, "name", name, "self-link", metadata.GetSelfLink(), "repo", repo)
 
 			exists, err := git.BranchExists(repo, namespace.ObjectMeta.Name)

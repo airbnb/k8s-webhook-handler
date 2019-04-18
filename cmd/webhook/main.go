@@ -22,6 +22,7 @@ var (
 	dryRun            = flag.Bool("dry", false, "Enable dry-run, print resources instead of deleting them")
 	baseURL           = flag.String("gh-base-url", "", "GitHub Enterprise: Base URL")
 	uploadURL         = flag.String("gh-upload-url", "", "GitHub Enterprise: Upload URL")
+	gitAddress        = flag.String("git", "git@github.com", "Git address")
 	debug             = flag.Bool("debug", false, "Enable debug logging")
 	insecure          = flag.Bool("insecure", false, "Allow omitting WEBHOOK_SECRET for testing")
 
@@ -57,6 +58,7 @@ func main() {
 	}
 
 	dh, err := handler.NewDeleteHandler(logger, kconfig, *sourceSelectorKey, *dryRun)
+	dh.GitAddress = *gitAddress
 	if err != nil {
 		fatal(err)
 	}

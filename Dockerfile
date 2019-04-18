@@ -4,7 +4,7 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod tidy
 COPY . .
-RUN go build ./... && go install ./...
+RUN go build ./... && go test ./... && go install ./...
 
 FROM alpine:3.6
 RUN apk add --update ca-certificates git openssh-client \

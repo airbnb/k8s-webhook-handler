@@ -8,7 +8,8 @@ RUN go build ./... && go install ./...
 
 FROM alpine:3.6
 RUN apk add --update ca-certificates git openssh-client \
-  && adduser -u 1000 -D user \
+  && addgroup -g 1000 user \
+  && adduser -u 1000 -D user -G user \
   && ssh-keyscan github.com > /etc/ssh/ssh_known_hosts
 USER user
 COPY --from=0 /go/bin/* /usr/bin/

@@ -87,6 +87,7 @@ func (h *PushHandler) Handle(ctx context.Context, event *github.PushEvent) (*han
 	acr := meta.NewAccessor()
 	acr.SetAnnotations(obj, map[string]string{
 		annotationPrefix + "ref":       *event.Ref,
+		annotationPrefix + "before":    *event.Before,
 		annotationPrefix + "revision":  *event.HeadCommit.ID,
 		annotationPrefix + "repo_name": *event.Repo.FullName,
 		annotationPrefix + "repo_url":  *event.Repo.GitURL,

@@ -14,6 +14,7 @@ repo the push was and submit it to the k8s api with the following annotations
 added:
 
  - `k8s-webhook-handler.io/ref`: event.Ref
+ - `k8s-webhook-handler.io/before`: event.Before
  - `k8s-webhook-handler.io/revision`: event.HeadCommit.ID
  - `k8s-webhook-handler.io/repo_name`: event.Repo.FullName
  - `k8s-webhook-handler.io/repo_url`: event.Repo.GitURL

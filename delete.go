@@ -110,38 +110,6 @@ func (p *DeleteHandler) HandleResources(namespace string, selector labels.Select
 	return unhandled, nil
 }
 
-func (p *DeleteHandler) FindResources(namespace string) ([]runtime.Unstructured, error) {
-	req, err := labels.NewRequirement(p.SelectorKey, selection.Exists, nil)
-	if err != nil {
-		return nil, err
-	}
-	selector := labels.NewSelector().Add(*req)
-
-	resources := []runtime.Unstructured{}
-	unhandled, err := p.HandleResources(namespace, selector, func(resource runtime.Unstructured, client dynamic.ResourceInterface) error {
-		resources = append(resources, resource)
-		return nil
-	})
-	level.Debug(logger).Log("msg", "Unhandled objects", "objects", unhandled)
-	return resources, err
-}
-
-func (p *DeleteHandler) FindResourcesAll() ([]runtime.Unstructured, error) {
-	resources := []runtime.Unstructured{}
-	namespaces, err := p.Clientset.CoreV1().Namespaces().List(metav1.ListOptions{})
-	if err != nil {
-		return nil, err
-	}
-	for _, namespace := range namespaces.Items {
-		res, err := p.FindResources(namespace.ObjectMeta.Name)
-		if err != nil {
-			return nil, err
-		}
-		resources = append(resources, res...)
-	}
-	return resources, nil
-}
-
 func (p *DeleteHandler) PurgeBranchless() error {
 	req, err := labels.NewRequirement(p.SelectorKey, selection.Exists, nil)
 	if err != nil {

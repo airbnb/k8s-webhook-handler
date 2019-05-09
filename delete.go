@@ -147,11 +147,6 @@ func (p *DeleteHandler) PurgeBranchless() error {
 			if exists {
 				level.Debug(logger).Log("msg", "branch still exists")
 				namespaceInUse = true
-			} else {
-				level.Debug(logger).Log("msg", "branch not found, deleting resource")
-				if err := p.deleteResource(resource, client); err != nil {
-					return errors.WithStack(err)
-				}
 			}
 			return nil
 		})
@@ -191,7 +186,7 @@ func (p *DeleteHandler) Handle(_ context.Context, ev *github.DeleteEvent) (*hand
 		return nil, errors.WithStack(err)
 	}
 
-	retained, err := p.HandleResources(namespace, selector, p.deleteResource)
+	retained, err := p.HandleResources(namespace, selector, nil)
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
@@ -231,11 +226,6 @@ func (p *DeleteHandler) findAndHandleResource(gv *schema.GroupVersion, resource 
 	logger := log.With(logger, "namespace", namespace, "selector", selector)
 	level.Debug(logger).Log("msg", "Getting resources")
 	rclient := p.Interface.Resource(gv.WithResource(resource.Name)).Namespace(namespace)
-	/*
-		if err != nil {
-			return nil, fmt.Errorf("Couldn't create client for GroupVersionKind: %s", err)
-		}*/
-	//rclient := client.Resource(resource, namespace)
 	list, err := rclient.List(metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("Couldn't List resources: %s", err)
@@ -255,30 +245,14 @@ func (p *DeleteHandler) findAndHandleResource(gv *schema.GroupVersion, resource 
 			return nil, fmt.Errorf("Couldn't get metadata for %v: %s", unstructured, err)
 		}
 		if selector.Matches(labels.Set(metadata.GetLabels())) {
-			if err := handlerFn(unstructured, rclient); err != nil {
-				return nil, fmt.Errorf("Handler failed: %s", err)
+			if handlerFn != nil {
+				if err := handlerFn(unstructured, rclient); err != nil {
+					return nil, fmt.Errorf("Handler failed: %s", err)
+				}
 			}
 		} else {
 			unhandled = append(unhandled, metadata)
 		}
 	}
 	return unhandled, nil
-}
-
-// deleteResource implements resourceHandlerFn
-func (p *DeleteHandler) deleteResource(resource runtime.Unstructured, client dynamic.ResourceInterface) error {
-	metadata, err := meta.Accessor(resource)
-	if err != nil {
-		return err
-	}
-	name := metadata.GetName()
-	logger := log.With(logger, "name", name, "self-link", metadata.GetSelfLink())
-	logger.Log("msg", "Deleting")
-	if p.DryRun {
-		return nil
-	}
-	propagationPolicy := metav1.DeletePropagationForeground
-	return client.Delete(name, &metav1.DeleteOptions{
-		PropagationPolicy: &propagationPolicy,
-	})
 }

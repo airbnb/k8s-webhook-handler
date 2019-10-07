@@ -65,7 +65,7 @@ func (h *PushHandler) Handle(ctx context.Context, event *github.PushEvent) (*han
 		*event.Repo.Name,
 		h.ResourcePath,
 		&github.RepositoryContentGetOptions{
-			Ref: *event.HeadCommit.ID,
+			Ref: *event.After,
 		})
 	if err != nil {
 		return nil, fmt.Errorf("Couldn't get file %s from %s/%s at %s: %s", h.ResourcePath, *event.Repo.Owner.Login, *event.Repo.Name, *event.HeadCommit.ID, err)

@@ -5,6 +5,7 @@ import (
 	"flag"
 	"net/http"
 	"os"
+	"regexp"
 	"time"
 
 	"github.com/go-kit/kit/log"
@@ -24,6 +25,7 @@ var (
 	gitAddress  = flag.String("git", "git@github.com", "Git address")
 	debug       = flag.Bool("debug", false, "Enable debug logging")
 	insecure    = flag.Bool("insecure", false, "Allow omitting WEBHOOK_SECRET for testing")
+	ignoreRef   = flag.String("ignore", "", "Ignore refs matching this regex")
 
 	statsdAddress  = flag.String("statsd.address", "localhost:8125", "Address to send statsd metrics to")
 	statsdProto    = flag.String("statsd.proto", "udp", "Protocol to use for statsd")
@@ -51,6 +53,22 @@ func main() {
 		logger = level.NewFilter(logger, level.AllowInfo())
 	}
 
+	config := &handler.Config{
+		Namespace:    *namespace,
+		ResourcePath: *resoucePath,
+		Secret:       []byte(githubSecret),
+	}
+
+	if *ignoreRef != "" {
+		level.Debug(logger).Log("msg", "Parsing regex", "regex", *ignoreRef)
+		regex, err := regexp.Compile(*ignoreRef)
+		if err != nil {
+			fatal(err)
+		}
+		config.IgnoreRefRegex = regex
+	}
+
+	level.Info(logger).Log("msg", "Connecting to kubernetes", "kubeconfig", *kubeconfig)
 	kClient, err := handler.NewKubernetesClient(*kubeconfig)
 	if err != nil {
 		fatal(err)
@@ -59,12 +77,6 @@ func main() {
 	loader, err := handler.NewGithubLoader(os.Getenv("GITHUB_TOKEN"), *baseURL, *uploadURL)
 	if err != nil {
 		fatal(err)
-	}
-
-	config := &handler.Config{
-		Namespace:    *namespace,
-		ResourcePath: *resoucePath,
-		Secret:       []byte(githubSecret),
 	}
 
 	ticker := time.NewTicker(*statsdInterval)

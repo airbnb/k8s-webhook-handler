@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"net/http"
+	"regexp"
 	"time"
 
 	"github.com/go-kit/kit/log"
@@ -16,9 +17,10 @@ import (
 const annotationPrefix = "k8s-webhook-handler.io/"
 
 type Config struct {
-	Namespace    string
-	ResourcePath string
-	Secret       []byte
+	Namespace      string
+	ResourcePath   string
+	Secret         []byte
+	IgnoreRefRegex *regexp.Regexp
 }
 
 type Handler struct {
@@ -93,6 +95,10 @@ func (h *Handler) handle(w http.ResponseWriter, r *http.Request) (*handlerRespon
 func (h *Handler) HandleEvent(ctx context.Context, event interface{}) (*handlerResponse, error) {
 	switch e := event.(type) {
 	case *github.PushEvent:
+		if h.Config.IgnoreRefRegex != nil && h.Config.IgnoreRefRegex.MatchString(*e.Ref) {
+			level.Debug(h.Logger).Log("msg", "Ref is ignored, skipping", "ref", *e.Ref, "regex", h.Config.IgnoreRefRegex)
+			break
+		}
 		obj, err := h.Loader.Load(ctx, *e.Repo.Owner.Login+"/"+*e.Repo.Name, h.Config.ResourcePath, *e.After)
 		if err != nil {
 			return &handlerResponse{message: "Couldn't downlaod manifest"}, err
@@ -110,8 +116,10 @@ func (h *Handler) HandleEvent(ctx context.Context, event interface{}) (*handlerR
 			return &handlerResponse{message: "Couldn't apply resource"}, err
 		}
 	case *github.DeleteEvent:
+	default:
+		return &handlerResponse{http.StatusBadRequest, "Webhook not supported"}, nil
 	}
-	return &handlerResponse{http.StatusBadRequest, "Webhook not supported"}, nil
+	return nil, nil
 }
 
 type handlerResponse struct {

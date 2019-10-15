@@ -24,28 +24,27 @@ var (
 	uploadURL   = flag.String("gh-upload-url", "", "GitHub Enterprise: Upload URL")
 	gitAddress  = flag.String("git", "git@github.com", "Git address")
 	debug       = flag.Bool("debug", false, "Enable debug logging")
+	dryRun      = flag.Bool("dry", false, "Dry run; Do not apply resouce manifest")
 	insecure    = flag.Bool("insecure", false, "Allow omitting WEBHOOK_SECRET for testing")
 	ignoreRef   = flag.String("ignore", "", "Ignore refs matching this regex")
 
 	statsdAddress  = flag.String("statsd.address", "localhost:8125", "Address to send statsd metrics to")
 	statsdProto    = flag.String("statsd.proto", "udp", "Protocol to use for statsd")
 	statsdInterval = flag.Duration("statsd.interval", 30*time.Second, "statsd flush interval")
-
-	logger = log.With(log.NewLogfmtLogger(log.NewSyncWriter(os.Stderr)), "caller", log.Caller(5))
 )
 
-func fatal(err error) {
+func fatal(logger log.Logger, err error) {
 	// FIXME: override caller, not add it
-	logger := log.With(logger, "caller", log.Caller(4))
-	level.Error(logger).Log("msg", err.Error())
+	level.Error(logger).Log("msg", err.Error(), "caller", log.Caller(4))
 	os.Exit(1)
 }
 
 func main() {
+	logger := log.With(log.NewLogfmtLogger(log.NewSyncWriter(os.Stderr)), "caller", log.Caller(5))
 	flag.Parse()
 	githubSecret := os.Getenv("WEBHOOK_SECRET")
 	if githubSecret == "" && !*insecure {
-		fatal(errors.New("WEBHOOK_SECRET not set. Use -insecure to disable webhook verification"))
+		fatal(logger, errors.New("WEBHOOK_SECRET not set. Use -insecure to disable webhook verification"))
 	}
 	if *debug {
 		logger = level.NewFilter(logger, level.AllowAll())
@@ -57,13 +56,14 @@ func main() {
 		Namespace:    *namespace,
 		ResourcePath: *resoucePath,
 		Secret:       []byte(githubSecret),
+		DryRun:       *dryRun,
 	}
 
 	if *ignoreRef != "" {
 		level.Debug(logger).Log("msg", "Parsing regex", "regex", *ignoreRef)
 		regex, err := regexp.Compile(*ignoreRef)
 		if err != nil {
-			fatal(err)
+			fatal(logger, err)
 		}
 		config.IgnoreRefRegex = regex
 	}
@@ -71,12 +71,12 @@ func main() {
 	level.Info(logger).Log("msg", "Connecting to kubernetes", "kubeconfig", *kubeconfig)
 	kClient, err := handler.NewKubernetesClient(*kubeconfig)
 	if err != nil {
-		fatal(err)
+		fatal(logger, err)
 	}
 
 	loader, err := handler.NewGithubLoader(os.Getenv("GITHUB_TOKEN"), *baseURL, *uploadURL)
 	if err != nil {
-		fatal(err)
+		fatal(logger, err)
 	}
 
 	ticker := time.NewTicker(*statsdInterval)
@@ -88,5 +88,5 @@ func main() {
 
 	http.Handle("/", server)
 	level.Info(logger).Log("msg", "Start listening", "addr", *listenAddr)
-	fatal(http.ListenAndServe(*listenAddr, nil))
+	fatal(logger, http.ListenAndServe(*listenAddr, nil))
 }

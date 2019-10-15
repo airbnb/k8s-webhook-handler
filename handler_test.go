@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http/httptest"
+	"os"
 	"testing"
 
+	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/metrics/statsd"
-	"github.com/google/go-github/v24/github"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -36,30 +37,10 @@ func (l *mockLoader) Load(ctx context.Context, repo, path, ref string) (runtime.
 
 func TestHandle(t *testing.T) {
 	var (
-		owner    = "foo"
-		name     = "bar"
-		fullName = "foo bar"
-		gitURL   = "giturl"
-		sshURL   = "sshurl"
-
-		ref    = "ref"
-		before = "before"
-		after  = "after"
-
 		config = &Config{Namespace: "namespace", ResourcePath: "foo/bar.yaml", Secret: []byte("foobar")}
 	)
-	_ = &github.PushEvent{
-		Repo: &github.PushEventRepository{
-			Name:     &name,
-			Owner:    &github.User{Login: &owner},
-			FullName: &fullName,
-			GitURL:   &gitURL,
-			SSHURL:   &sshURL,
-		},
-		Ref:    &ref,
-		Before: &before,
-		After:  &after,
-	}
+
+	logger := log.With(log.NewLogfmtLogger(log.NewSyncWriter(os.Stderr)), "caller", log.Caller(5))
 	handler := NewGithubHookHandler(
 		logger,
 		config,

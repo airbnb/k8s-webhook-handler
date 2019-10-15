@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"regexp"
 	"time"
@@ -21,6 +22,7 @@ type Config struct {
 	ResourcePath   string
 	Secret         []byte
 	IgnoreRefRegex *regexp.Regexp
+	DryRun         bool
 }
 
 type Handler struct {
@@ -48,7 +50,7 @@ func NewGithubHookHandler(logger log.Logger, config *Config, kubernetesClient Ku
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer func(begin time.Time) { h.callDuration.Observe(time.Since(begin).Seconds()) }(time.Now())
-	logger := log.With(logger, "client", r.RemoteAddr)
+	logger := log.With(h.Logger, "client", r.RemoteAddr)
 	h.requestCounter.Add(1)
 	hr, err := h.handle(w, r)
 	if hr == nil {
@@ -92,33 +94,34 @@ func (h *Handler) handle(w http.ResponseWriter, r *http.Request) (*handlerRespon
 
 // Handler handles a webhook.
 // We have to use interface{} because of https://github.com/google/go-github/issues/1154.
-func (h *Handler) HandleEvent(ctx context.Context, event interface{}) (*handlerResponse, error) {
-	switch e := event.(type) {
-	case *github.PushEvent:
-		if h.Config.IgnoreRefRegex != nil && h.Config.IgnoreRefRegex.MatchString(*e.Ref) {
-			level.Debug(h.Logger).Log("msg", "Ref is ignored, skipping", "ref", *e.Ref, "regex", h.Config.IgnoreRefRegex)
-			break
-		}
-		obj, err := h.Loader.Load(ctx, *e.Repo.Owner.Login+"/"+*e.Repo.Name, h.Config.ResourcePath, *e.After)
-		if err != nil {
-			return &handlerResponse{message: "Couldn't downlaod manifest"}, err
-		}
-		meta.NewAccessor().SetAnnotations(obj, map[string]string{
-			annotationPrefix + "ref":       *e.Ref,
-			annotationPrefix + "before":    *e.Before,
-			annotationPrefix + "revision":  *e.After,
-			annotationPrefix + "repo_name": *e.Repo.FullName,
-			annotationPrefix + "repo_url":  *e.Repo.GitURL,
-			annotationPrefix + "repo_ssh":  *e.Repo.SSHURL,
-		})
-		level.Info(logger).Log("msg", "Downloaded manifest succesfully", "obj", obj)
-		if err := h.KubernetesClient.Apply(obj, h.Config.Namespace); err != nil {
-			return &handlerResponse{message: "Couldn't apply resource"}, err
-		}
-	case *github.DeleteEvent:
-	default:
-		return &handlerResponse{http.StatusBadRequest, "Webhook not supported"}, nil
+func (h *Handler) HandleEvent(ctx context.Context, ev interface{}) (*handlerResponse, error) {
+	event, err := ParseEvent(ev)
+	if err != nil {
+		return &handlerResponse{http.StatusBadRequest, "Invalid/unsupported event"}, err
 	}
+	logger := log.With(h.Logger, "revision", event.Revision, "ref", event.Ref)
+
+	if h.Config.IgnoreRefRegex != nil && h.Config.IgnoreRefRegex.MatchString(event.Ref) {
+		level.Debug(logger).Log("msg", "Ref is ignored, skipping", "regex", h.Config.IgnoreRefRegex)
+		return &handlerResponse{message: "Ref is ignored, skipping"}, nil
+	}
+
+	obj, err := h.Loader.Load(ctx, *event.Repository.FullName, h.Config.ResourcePath, event.Revision)
+	if err != nil {
+		return &handlerResponse{message: "Couldn't downlaod manifest"}, err
+	}
+
+	annotations := event.Annotations()
+	meta.NewAccessor().SetAnnotations(obj, annotations)
+	level.Info(logger).Log("msg", "Downloaded manifest succesfully")
+	if h.Config.DryRun {
+		level.Info(logger).Log("msg", "Dry run enabled, skipping apply", "obj", fmt.Sprintf("%s", obj))
+		return nil, nil
+	}
+	if err := h.KubernetesClient.Apply(obj, h.Config.Namespace); err != nil {
+		return &handlerResponse{message: "Couldn't apply resource"}, err
+	}
+
 	return nil, nil
 }
 

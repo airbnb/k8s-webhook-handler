@@ -1,73 +1,65 @@
 package handler
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"net/http/httptest"
+	"os"
 	"testing"
 
+	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/metrics/statsd"
-	"github.com/google/go-github/v24/github"
-	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	fake "k8s.io/client-go/kubernetes/fake"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
-func TestHandleDelete(t *testing.T) {
-	repo := "foo/bar"
-	selectorKey := "ci-source-repo"
-	selectorValue := "foo.bar"
-	branch := "master"
-	refType := "branch"
+type mockKubernetesClient struct {
+	obj       runtime.Object
+	namespace string
+}
 
-	service := &v1.Service{ObjectMeta: metav1.ObjectMeta{
-		Name:      "foo",
-		Namespace: branch,
-		Labels:    map[string]string{selectorKey: selectorValue},
-	}}
-	namespace := &v1.Namespace{ObjectMeta: metav1.ObjectMeta{
-		Name: branch,
-	}}
-	clientset := fake.NewSimpleClientset(namespace, service)
+func (k *mockKubernetesClient) Apply(obj runtime.Object, namespace string) error {
+	k.obj = obj
+	k.namespace = namespace
+	return nil
+}
 
-	discoveryInterface := clientset.Discovery()
-	// FIXME: DiscoveryInterface mock isn't complete, so
-	// ServerPreferredResources() returns nothing and breaks the purger
-	t.Log(discoveryInterface.ServerPreferredResources())
-	t.Log(clientset.Fake.Resources)
-	p := &DeleteHandler{
-		DiscoveryInterface: discoveryInterface,
-		NamespaceInterface: clientset.CoreV1().Namespaces(),
-		SelectorKey:        selectorKey,
-	}
-	h := NewGithubHookHandler([]byte("foo"), statsd.New("k8s-foobar.", logger))
-	h.DeleteHandler = p
+type mockLoader struct {
+	obj  runtime.Object
+	repo string
+	path string
+	ref  string
+}
 
-	payload := github.DeleteEvent{
-		RefType: &refType,
-		Ref:     &branch,
-		Repo: &github.Repository{
-			FullName: &repo,
-		},
-	}
-	fmt.Println(payload)
+func (l *mockLoader) Load(ctx context.Context, repo, path, ref string) (runtime.Object, error) {
+	return l.obj, nil
+}
 
-	/*
-		pr, pw := io.Pipe()
-		enc := json.NewEncoder(pw)
-		go func() { enc.Encode(payload) }()*/
+func TestHandle(t *testing.T) {
+	var (
+		config = &Config{Namespace: "namespace", ResourcePath: "foo/bar.yaml", Secret: []byte("foobar")}
+	)
 
-	req := httptest.NewRequest("POST", "http://example.com/", nil) //pr)
+	logger := log.With(log.NewLogfmtLogger(log.NewSyncWriter(os.Stderr)), "caller", log.Caller(5))
+	handler := NewGithubHookHandler(
+		logger,
+		config,
+		&mockKubernetesClient{},
+		&mockLoader{},
+		statsd.New("k8s-ci-purger.", logger),
+	)
+
+	req := httptest.NewRequest("POST", "http://example.com/", nil)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-GitHub-Event", "DeleteEvent")
 	req.Header.Set("X-GitHub-Delivery", "4636fc67-b693-4a27-87a4-18d4021ae789")
 	req.Header.Set("X-Hub-Signature", "sha1=1234")
 	w := httptest.NewRecorder()
-	h.ServeHTTP(w, req)
+
+	handler.ServeHTTP(w, req)
 
 	resp := w.Result()
 	body, _ := ioutil.ReadAll(resp.Body)
-
 	fmt.Println(resp.StatusCode)
 	fmt.Println(resp.Header.Get("Content-Type"))
 	fmt.Println(string(body))

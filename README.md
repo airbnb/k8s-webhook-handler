@@ -1,32 +1,28 @@
 # k8s-webhook-handler
-The k8s-webhook-handler listens for (GitHub) webhooks and acts on various events
+Create Kubernetes resources in response to (GitHub) webhooks!
 
-## Event Handlers
-### DeleteEvent
-On branch deletion and deletes all resources in a kubernetes cluster that have a
-label matching the repo name and are in a namespace matching the branch name.
-If there are no other objects with the given label key in the namespace, it also
-deletes the namespace and all remaining objects.
+## How does it work?
+When the k8s-webhook-handler receives a webhook, it downloads a manifest
+(`.ci/workflow.yaml` by default) from the repository.
 
-### PushEvent
-On push events, k8s-webhook-handler will checkout `.ci/workflow.yaml` from the
-repo the push was and submit it to the k8s api with the following annotations
-added:
+For push events, it downloads the manifest from the given revision. Otherwise
+it's checked out from the repository's default branch.
 
- - `k8s-webhook-handler.io/ref`: event.Ref
- - `k8s-webhook-handler.io/before`: event.Before
- - `k8s-webhook-handler.io/revision`: event.HeadCommit.ID
- - `k8s-webhook-handler.io/repo_name`: event.Repo.FullName
- - `k8s-webhook-handler.io/repo_url`: event.Repo.GitURL
- - `k8s-webhook-handler.io/repo_ssh`: event.Repo.SSHURL
+After that, it applies the manifest and adds the following annotations:
+
+ - `k8s-webhook-handler.io/ref`: Git reference (e.g. `refs/heads/master`)
+ - `k8s-webhook-handler.io/revision`: Revision of HEAD
+ - `k8s-webhook-handler.io/repo_name`: Repo name including user
+   (e.g. `itskoko/k8s-webhook-handler`)
+ - `k8s-webhook-handler.io/repo_url`: git URL (e.g.
+   `git://github.com/itskoko/k8s-webhook-handler.git`)
+ - `k8s-webhook-handler.io/repo_ssh`: ssh URL (e.g.
+   `git@github.com:itskoko/k8s-webhook-handler.git`)
 
 ## Binaries
 - cmd/webhook is the actual webhook handling server
-- cmd/reconciler iterates over all k8s namespaces and deletes all objects that
-  are labeled for which there is no remote branch anymore.
 
 ## Usage
-Currently only github delete webhooks in json format are supported.
 Beside the manifests and templates in `deploy/`, a secret 'webhook-handler' with
 the following fields is expected:
 

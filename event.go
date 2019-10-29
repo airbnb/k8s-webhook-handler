@@ -16,6 +16,7 @@ type Event struct {
 	Action   string
 	Revision string
 	Ref      string
+	Before   string
 	*github.Repository
 }
 
@@ -28,6 +29,7 @@ func (e *Event) Annotations() map[string]string {
 		annotationPrefix + "repo_ssh":     *e.Repository.SSHURL,
 		annotationPrefix + "ref":          e.Ref,
 		annotationPrefix + "revision":     e.Revision,
+		annotationPrefix + "before":       e.Before,
 	}
 }
 
@@ -39,6 +41,7 @@ func ParseEvent(ev interface{}) (*Event, error) {
 		event.Repository = pushEventRepoToRepo(e.GetRepo())
 		event.Revision = *e.After
 		event.Ref = *e.Ref
+		event.Before = *e.Before
 	case *github.DeleteEvent:
 		event.Type = "delete"
 		event.Repository = e.GetRepo()
@@ -54,6 +57,7 @@ func ParseEvent(ev interface{}) (*Event, error) {
 		event.Action = *e.Action
 		event.Repository = e.GetRepo()
 		event.Revision = *e.CheckSuite.AfterSHA
+		event.Before = *e.CheckSuite.BeforeSHA
 		event.Ref = branchToRef(*e.CheckSuite.HeadBranch)
 	}
 

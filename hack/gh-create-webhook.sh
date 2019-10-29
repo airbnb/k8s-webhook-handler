@@ -21,7 +21,7 @@ cat <<EOF | curl -X POST -H "Authorization: token $GITHUB_TOKEN" -f --data @- "$
     "delete"
   ],
   "config": {
-    "url": "$2",
+    "url": "$url",
     "content_type": "json",
     "secret": "$WEBHOOK_SECRET"
   }

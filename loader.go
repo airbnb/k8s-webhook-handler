@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/url"
 	"os"
@@ -68,7 +69,12 @@ func (l *GithubLoader) Load(ctx context.Context, repo, path, ref string) (runtim
 		return nil, fmt.Errorf("Couldn't get file %s from %s/%s at %s: %s", path, owner, name, ref, err)
 	}
 	defer file.Close()
-	content, err := ioutil.ReadAll(file)
+	return Decode(file)
+}
+
+// Decode reads a reader and parses the stream as runtime.Object.
+func Decode(r io.Reader) (runtime.Object, error) {
+	content, err := ioutil.ReadAll(r)
 	if err != nil {
 		return nil, fmt.Errorf("Couldn't read file: %s", err)
 	}

@@ -2,8 +2,10 @@
 Create Kubernetes resources in response to (GitHub) webhooks!
 
 ## How does it work?
-When the k8s-webhook-handler receives a webhook, it downloads a manifest
-(`.ci/workflow.yaml` by default) from the repository.
+When the k8s-webhook-handler receives a webhook, it:
+
+- Validates the payload's signature by using the `WEBHOOK_SECRET` as HMAC hexdigest secret
+- Downloads a manifest (`.ci/workflow.yaml` by default) from the repository.
 
 For push events, it downloads the manifest from the given revision. Otherwise
 it's checked out from the repository's default branch.
@@ -11,9 +13,12 @@ it's checked out from the repository's default branch.
 After that, it applies the manifest and adds the following annotations:
 
  - `k8s-webhook-handler.io/ref`: Git reference (e.g. `refs/heads/master`)
- - `k8s-webhook-handler.io/revision`: Revision of HEAD
- - `k8s-webhook-handler.io/repo_name`: Repo name including user
-   (e.g. `itskoko/k8s-webhook-handler`)
+ - `k8s-webhook-handler.io/revision`: The SHA of the most recent commit on `ref`
+   after the push.
+ - `k8s-webhook-handler.io/before`: The SHA of the most recent commit on `ref`
+   before the push.
+ - `k8s-webhook-handler.io/repo_name`: Repo name including user (e.g.
+   `itskoko/k8s-webhook-handler`)
  - `k8s-webhook-handler.io/repo_url`: git URL (e.g.
    `git://github.com/itskoko/k8s-webhook-handler.git`)
  - `k8s-webhook-handler.io/repo_ssh`: ssh URL (e.g.
@@ -34,3 +39,10 @@ The value should match the "Secret" field in the GitHub webhook settings and can
 ```
 kubectl create secret generic k8s-ci --from-literal=GITHUB_SECRET=github-secret ...
 ```
+
+## Security
+The `WEBHOOK_SECRET` is required for secure operation. Running without means not
+validating the webhooks which effectively grants everyone permission to run
+arbitrary manifests on your cluster. If you really need to run without
+validation e.g for testing purposes, you can run the handler with the
+`-insecure` flag.

@@ -12,7 +12,7 @@ import (
 	"github.com/go-kit/kit/log/level"
 	"github.com/go-kit/kit/metrics/statsd"
 
-	handler "github.com/itskoko/k8s-webhook-handler"
+	handler "github.com/airbnb/k8s-webhook-handler"
 )
 
 var (

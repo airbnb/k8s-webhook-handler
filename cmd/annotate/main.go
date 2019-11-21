@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/google/go-github/v24/github"
-	handler "github.com/itskoko/k8s-webhook-handler"
+	handler "github.com/airbnb/k8s-webhook-handler"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
@@ -21,7 +21,7 @@ func main() {
 		revision = flag.String("-revision", "0000000000000000000000000000000000000000", "Revision")
 		ref      = flag.String("-ref", "refs/heads/master", "Ref")
 		before   = flag.String("-before", "0000000000000000000000000000000000000000", "Before")
-		repoURL  = flag.String("-url", "git://github.com/itskoko/k8s-webhook-handler.git", "git URL")
+		repoURL  = flag.String("-url", "git://github.com/airbnb/k8s-webhook-handler.git", "git URL")
 		sshUser  = flag.String("-ssh-user", "git", "SSH user")
 	)
 	flag.Parse()

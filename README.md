@@ -18,11 +18,11 @@ After that, it applies the manifest and adds the following annotations:
  - `k8s-webhook-handler.io/before`: The SHA of the most recent commit on `ref`
    before the push.
  - `k8s-webhook-handler.io/repo_name`: Repo name including user (e.g.
-   `itskoko/k8s-webhook-handler`)
+   `airbnb/k8s-webhook-handler`)
  - `k8s-webhook-handler.io/repo_url`: git URL (e.g.
-   `git://github.com/itskoko/k8s-webhook-handler.git`)
+   `git://github.com/airbnb/k8s-webhook-handler.git`)
  - `k8s-webhook-handler.io/repo_ssh`: ssh URL (e.g.
-   `git@github.com:itskoko/k8s-webhook-handler.git`)
+   `git@github.com:airbnb/k8s-webhook-handler.git`)
 
 ## Binaries
 - cmd/webhook is the actual webhook handling server

@@ -1,4 +1,4 @@
-module github.com/itskoko/k8s-webhook-handler
+module github.com/airbnb/k8s-webhook-handler
 
 go 1.12
 

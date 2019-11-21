@@ -8,8 +8,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/google/go-github/v24/github"
 	handler "github.com/airbnb/k8s-webhook-handler"
+	"github.com/google/go-github/v24/github"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
@@ -56,7 +56,7 @@ func main() {
 	for _, file := range flag.Args() {
 		fh, err := os.Open(file)
 		if err != nil {
-			log.Fatalf("Couldn't read file %s: %s", err)
+			log.Fatalf("Couldn't read file %s: %s", file, err)
 		}
 		defer fh.Close()
 		obj, err := handler.Decode(fh)

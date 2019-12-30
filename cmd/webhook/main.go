@@ -22,7 +22,6 @@ var (
 	kubeconfig  = flag.String("kubeconfig", "", "If set, use this kubeconfig to connect to kubernetes")
 	baseURL     = flag.String("gh-base-url", "", "GitHub Enterprise: Base URL")
 	uploadURL   = flag.String("gh-upload-url", "", "GitHub Enterprise: Upload URL")
-	gitAddress  = flag.String("git", "git@github.com", "Git address")
 	debug       = flag.Bool("debug", false, "Enable debug logging")
 	dryRun      = flag.Bool("dry", false, "Dry run; Do not apply resouce manifest")
 	insecure    = flag.Bool("insecure", false, "Allow omitting WEBHOOK_SECRET for testing")

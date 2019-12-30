@@ -25,10 +25,7 @@ func (k *mockKubernetesClient) Apply(obj runtime.Object, namespace string) error
 }
 
 type mockLoader struct {
-	obj  runtime.Object
-	repo string
-	path string
-	ref  string
+	obj runtime.Object
 }
 
 func (l *mockLoader) Load(ctx context.Context, repo, path, ref string) (runtime.Object, error) {

@@ -3,7 +3,12 @@ ENV CGO_ENABLED=0
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod tidy
+ENV GOLANGCI_LINT_VERSION=v1.22.0
+RUN curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh \
+  | sh -s -- -b $(go env GOPATH)/bin $GOLANGCI_LINT_VERSION
+
 COPY . .
+RUN golangci-lint run
 RUN go build ./... && go test ./... && go install ./...
 
 FROM alpine:3.6

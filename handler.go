@@ -112,7 +112,9 @@ func (h *Handler) HandleEvent(ctx context.Context, ev interface{}) (*handlerResp
 	}
 
 	annotations := event.Annotations()
-	meta.NewAccessor().SetAnnotations(obj, annotations)
+	if err := meta.NewAccessor().SetAnnotations(obj, annotations); err != nil {
+		level.Error(logger).Log("msg", "Couldn't set annotations", "err", err)
+	}
 	level.Info(logger).Log("msg", "Downloaded manifest succesfully")
 	if h.Config.DryRun {
 		level.Info(logger).Log("msg", "Dry run enabled, skipping apply", "obj", fmt.Sprintf("%s", obj))

@@ -60,7 +60,13 @@ func main() {
 		}
 		defer fh.Close()
 		obj, err := handler.Decode(fh)
-		meta.NewAccessor().SetAnnotations(obj, annotations)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if err := meta.NewAccessor().SetAnnotations(obj, annotations); err != nil {
+			log.Fatal(err)
+		}
+
 		if err := unstructured.UnstructuredJSONScheme.Encode(obj, os.Stdout); err != nil {
 			log.Fatal(err)
 		}

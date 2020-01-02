@@ -8,7 +8,7 @@ RUN curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/i
   | sh -s -- -b $(go env GOPATH)/bin $GOLANGCI_LINT_VERSION
 
 COPY . .
-RUN golangci-lint run
+RUN golangci-lint run --timeout 30m
 RUN go build ./... && go test ./... && go install ./...
 
 FROM alpine:3.6

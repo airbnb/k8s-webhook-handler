@@ -16,16 +16,17 @@ import (
 )
 
 var (
-	listenAddr  = flag.String("l", ":8080", "Address to listen on for webhook requests")
-	namespace   = flag.String("ns", "ci", "Namespace to deploy workflows to")
-	resoucePath = flag.String("p", ".ci/workflow.yaml", "Path to resource manifest in repository")
-	kubeconfig  = flag.String("kubeconfig", "", "If set, use this kubeconfig to connect to kubernetes")
-	baseURL     = flag.String("gh-base-url", "", "GitHub Enterprise: Base URL")
-	uploadURL   = flag.String("gh-upload-url", "", "GitHub Enterprise: Upload URL")
-	debug       = flag.Bool("debug", false, "Enable debug logging")
-	dryRun      = flag.Bool("dry", false, "Dry run; Do not apply resouce manifest")
-	insecure    = flag.Bool("insecure", false, "Allow omitting WEBHOOK_SECRET for testing")
-	ignoreRef   = flag.String("ignore", "", "Ignore refs matching this regex")
+	listenAddr   = flag.String("l", ":8080", "Address to listen on for webhook requests")
+	namespace    = flag.String("ns", "ci", "Namespace to deploy workflows to")
+	resourcePath = flag.String("p", ".ci/workflow.yaml", "Path to resource manifest in repository")
+	livenessPath = flag.String("lp", "/-/alive", "Path for liveness endpoint (Always returns 200 OK")
+	kubeconfig   = flag.String("kubeconfig", "", "If set, use this kubeconfig to connect to kubernetes")
+	baseURL      = flag.String("gh-base-url", "", "GitHub Enterprise: Base URL")
+	uploadURL    = flag.String("gh-upload-url", "", "GitHub Enterprise: Upload URL")
+	debug        = flag.Bool("debug", false, "Enable debug logging")
+	dryRun       = flag.Bool("dry", false, "Dry run; Do not apply resouce manifest")
+	insecure     = flag.Bool("insecure", false, "Allow omitting WEBHOOK_SECRET for testing")
+	ignoreRef    = flag.String("ignore", "", "Ignore refs matching this regex")
 
 	statsdAddress  = flag.String("statsd.address", "localhost:8125", "Address to send statsd metrics to")
 	statsdProto    = flag.String("statsd.proto", "udp", "Protocol to use for statsd")
@@ -52,10 +53,11 @@ func main() {
 	}
 
 	config := &handler.Config{
-		Namespace:    *namespace,
-		ResourcePath: *resoucePath,
-		Secret:       []byte(githubSecret),
-		DryRun:       *dryRun,
+		Namespace:           *namespace,
+		ResourcePath:        *resourcePath,
+		HandlerLivenessPath: *livenessPath,
+		Secret:              []byte(githubSecret),
+		DryRun:              *dryRun,
 	}
 
 	if *ignoreRef != "" {

@@ -18,11 +18,12 @@ import (
 const annotationPrefix = "k8s-webhook-handler.io/"
 
 type Config struct {
-	Namespace      string
-	ResourcePath   string
-	Secret         []byte
-	IgnoreRefRegex *regexp.Regexp
-	DryRun         bool
+	Namespace           string
+	ResourcePath        string
+	HandlerLivenessPath string
+	Secret              []byte
+	IgnoreRefRegex      *regexp.Regexp
+	DryRun              bool
 }
 
 type Handler struct {
@@ -52,6 +53,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer func(begin time.Time) { h.callDuration.Observe(time.Since(begin).Seconds()) }(time.Now())
 	logger := log.With(h.Logger, "client", r.RemoteAddr)
 	h.requestCounter.Add(1)
+
+	if r.URL.Path == h.Config.HandlerLivenessPath {
+		http.Error(w, "OK", http.StatusOK)
+		return
+	}
 	hr, err := h.handle(w, r)
 	if hr == nil {
 		hr = &handlerResponse{}

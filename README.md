@@ -23,6 +23,10 @@ After that, it applies the manifest and adds the following annotations:
    `git://github.com/airbnb/k8s-webhook-handler.git`)
  - `k8s-webhook-handler.io/repo_ssh`: ssh URL (e.g.
    `git@github.com:airbnb/k8s-webhook-handler.git`)
+ - `k8s-webhook-handler.io/event_type`: Event type (e.g. `push` or `delete`)
+ - `k8s-webhook-handler.io/event_action`: Event type specific action (e.g. `created` or `deleted`)
+
+(For details, see the [GitHub Events Docs](https://developer.github.com/v3/activity/events/).
 
 ## Binaries
 - cmd/webhook is the actual webhook handling server

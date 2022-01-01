@@ -1,4 +1,4 @@
-FROM golang:1.12 AS build-env
+FROM docker.io/golang:1.12 AS build-env
 ENV CGO_ENABLED=0
 WORKDIR /src
 COPY go.mod go.sum ./
@@ -11,7 +11,7 @@ COPY . .
 RUN golangci-lint run --timeout 30m
 RUN go build ./... && go test ./... && go install ./...
 
-FROM alpine:3.6
+FROM docker.io/alpine:3.6
 RUN apk add --update ca-certificates git openssh-client \
   && addgroup -g 1000 user \
   && adduser -u 1000 -D user -G user \

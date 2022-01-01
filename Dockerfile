@@ -11,11 +11,6 @@ COPY . .
 # RUN golangci-lint run --timeout 30m
 RUN go build ./... && go test ./... && go install ./...
 
-FROM docker.io/alpine:3.15
-RUN apk add --update ca-certificates git openssh-client \
-  && addgroup -g 1000 user \
-  && adduser -u 1000 -D user -G user \
-  && ssh-keyscan github.com > /etc/ssh/ssh_known_hosts
-USER user
+FROM scratch
 COPY --from=0 /go/bin/* /usr/bin/
 ENTRYPOINT [ "webhook" ]

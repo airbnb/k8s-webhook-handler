@@ -11,7 +11,7 @@ COPY . .
 # RUN golangci-lint run --timeout 30m
 RUN go build ./... && go test ./... && go install ./...
 
-FROM docker.io/alpine:3.6
+FROM docker.io/alpine:3.15
 RUN apk add --update ca-certificates git openssh-client \
   && addgroup -g 1000 user \
   && adduser -u 1000 -D user -G user \

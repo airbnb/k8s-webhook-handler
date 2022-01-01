@@ -1,4 +1,4 @@
-FROM docker.io/golang:1.12 AS build-env
+FROM docker.io/golang:1.17.5 AS build-env
 ENV CGO_ENABLED=0
 WORKDIR /src
 COPY go.mod go.sum ./
